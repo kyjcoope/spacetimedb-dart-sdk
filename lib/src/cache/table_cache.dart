@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:spacetimedb_dart_sdk/src/cache/row_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/codec/bsatn_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/shared_types.dart';
+import 'package:spacetimedb_dart_sdk/src/events/event_context.dart';
+import 'package:spacetimedb_dart_sdk/src/events/table_event.dart';
+import 'package:spacetimedb_dart_sdk/src/events/event.dart';
 
 /// Client-side cache for a single SpacetimeDB table
 ///
@@ -48,13 +51,23 @@ class TableCache<T> {
 
   final List<T> _rows = [];
 
-  // Stream controllers for real-time change notifications
+  // === Simple streams (existing - backward compatible) ===
   final StreamController<T> _insertController = StreamController<T>.broadcast();
   final StreamController<T> _deleteController = StreamController<T>.broadcast();
   final StreamController<TableUpdate<T>> _updateController =
       StreamController<TableUpdate<T>>.broadcast();
   final StreamController<TableChange<T>> _changeController =
       StreamController<TableChange<T>>.broadcast();
+
+  // === Event streams with context (new - Phase 3) ===
+  final StreamController<TableInsertEvent<T>> _insertEventController =
+      StreamController<TableInsertEvent<T>>.broadcast();
+  final StreamController<TableUpdateEvent<T>> _updateEventController =
+      StreamController<TableUpdateEvent<T>>.broadcast();
+  final StreamController<TableDeleteEvent<T>> _deleteEventController =
+      StreamController<TableDeleteEvent<T>>.broadcast();
+  final StreamController<TableEvent<T>> _eventController =
+      StreamController<TableEvent<T>>.broadcast();
 
   TableCache(
       {required this.tableId, required this.tableName, required this.decoder});
@@ -114,27 +127,206 @@ class TableCache<T> {
   /// ```
   Stream<TableChange<T>> get changeStream => _changeController.stream;
 
-  void _emitChanges(_RowChanges<T> changes) {
-    // Emit to streams (async, non-blocking, zero-overhead for no listeners)
+  // === Enhanced event streams with context (Phase 3) ===
+
+  /// Stream of insert events with transaction context
+  ///
+  /// Each event includes the inserted row and EventContext with metadata about
+  /// what caused the transaction (reducer name, caller, status, etc.).
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.insertEventStream.listen((event) {
+  ///   print('New note: ${event.row.title}');
+  ///
+  ///   if (event.context.isMyTransaction) {
+  ///     print('I created this note!');
+  ///   }
+  ///
+  ///   if (event.context.event is ReducerEvent) {
+  ///     final reducerEvent = event.context.event as ReducerEvent;
+  ///     print('Created by reducer: ${reducerEvent.reducerName}');
+  ///   }
+  /// });
+  /// ```
+  Stream<TableInsertEvent<T>> get insertEventStream =>
+      _insertEventController.stream;
+
+  /// Stream of update events with transaction context
+  ///
+  /// Each event includes both old and new row versions plus EventContext.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.updateEventStream.listen((event) {
+  ///   print('Updated: ${event.oldRow.title} → ${event.newRow.title}');
+  ///
+  ///   if (event.context.isMyTransaction) {
+  ///     print('I updated this note!');
+  ///   }
+  /// });
+  /// ```
+  Stream<TableUpdateEvent<T>> get updateEventStream =>
+      _updateEventController.stream;
+
+  /// Stream of delete events with transaction context
+  ///
+  /// Each event includes the deleted row and EventContext.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.deleteEventStream.listen((event) {
+  ///   print('Deleted note: ${event.row.title}');
+  ///
+  ///   if (event.context.isMyTransaction) {
+  ///     print('I deleted this note!');
+  ///   }
+  /// });
+  /// ```
+  Stream<TableDeleteEvent<T>> get deleteEventStream =>
+      _deleteEventController.stream;
+
+  /// Unified stream of all table events with context
+  ///
+  /// Emits all insert, update, and delete events as TableEvent sealed class.
+  /// Use pattern matching to handle different event types.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.eventStream.listen((event) {
+  ///   switch (event) {
+  ///     case TableInsertEvent(:final row, :final context):
+  ///       print('Inserted: ${row.title}');
+  ///       if (context.isMyTransaction) print('By me!');
+  ///     case TableUpdateEvent(:final oldRow, :final newRow):
+  ///       print('Updated: ${oldRow.title} → ${newRow.title}');
+  ///     case TableDeleteEvent(:final row):
+  ///       print('Deleted: ${row.title}');
+  ///   }
+  /// });
+  /// ```
+  Stream<TableEvent<T>> get eventStream => _eventController.stream;
+
+  // === Convenience filter streams (Phase 3) ===
+
+  /// Stream of inserts caused by reducers only (not subscriptions)
+  ///
+  /// Filters out inserts from initial subscription loads, showing only
+  /// inserts triggered by reducer calls.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.insertsFromReducers.listen((event) {
+  ///   print('Note created by reducer: ${event.row.title}');
+  ///   final reducerEvent = event.context.event as ReducerEvent;
+  ///   print('Reducer: ${reducerEvent.reducerName}');
+  /// });
+  /// ```
+  Stream<TableInsertEvent<T>> get insertsFromReducers =>
+      insertEventStream.where((e) => e.context.event is ReducerEvent);
+
+  /// Stream of inserts from the current client only
+  ///
+  /// Filters to show only rows inserted by transactions initiated by this
+  /// client connection. Useful for showing feedback for user actions.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.myInserts.listen((event) {
+  ///   print('I created: ${event.row.title}');
+  ///   // Show success toast to user
+  /// });
+  /// ```
+  Stream<TableInsertEvent<T>> get myInserts =>
+      insertEventStream.where((e) => e.context.isMyTransaction);
+
+  /// Stream of all events caused by reducers (not subscriptions)
+  ///
+  /// Filters to show only changes triggered by reducer calls, excluding
+  /// initial subscription loads.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.eventsFromReducers.listen((event) {
+  ///   switch (event) {
+  ///     case TableInsertEvent(:final row):
+  ///       print('Reducer added: ${row.title}');
+  ///     case TableUpdateEvent(:final oldRow, :final newRow):
+  ///       print('Reducer updated: ${oldRow.title} → ${newRow.title}');
+  ///     case TableDeleteEvent(:final row):
+  ///       print('Reducer deleted: ${row.title}');
+  ///   }
+  /// });
+  /// ```
+  Stream<TableEvent<T>> get eventsFromReducers =>
+      eventStream.where((e) => e.context.event is ReducerEvent);
+
+  /// Stream of all events from the current client only
+  ///
+  /// Filters to show only changes from transactions initiated by this client.
+  ///
+  /// Example:
+  /// ```dart
+  /// noteTable.myEvents.listen((event) {
+  ///   print('I made a change!');
+  ///   // Update UI to reflect user's action
+  /// });
+  /// ```
+  Stream<TableEvent<T>> get myEvents =>
+      eventStream.where((e) => e.context.isMyTransaction);
+
+  void _emitChanges(_RowChanges<T> changes, EventContext context) {
+    // Emit inserts to both simple and event streams
     for (final row in changes.inserted) {
+      // Simple streams (existing - backward compatible, no context)
       _insertController.add(row);
       _changeController.add(TableChange.insert(row));
+
+      // Event streams (new - with context)
+      final insertEvent = TableInsertEvent(context, row);
+      _insertEventController.add(insertEvent);
+      _eventController.add(insertEvent);
     }
 
+    // Emit deletes to both simple and event streams
     for (final row in changes.deleted) {
+      // Simple streams (existing - backward compatible, no context)
       _deleteController.add(row);
       _changeController.add(TableChange.delete(row));
+
+      // Event streams (new - with context)
+      final deleteEvent = TableDeleteEvent(context, row);
+      _deleteEventController.add(deleteEvent);
+      _eventController.add(deleteEvent);
     }
 
+    // Emit updates to both simple and event streams
     for (final (oldRow, newRow) in changes.updated) {
+      // Simple streams (existing - backward compatible, no context)
       _updateController.add(TableUpdate(oldRow, newRow));
       _changeController.add(TableChange.update(oldRow, newRow));
+
+      // Event streams (new - with context)
+      final updateEvent = TableUpdateEvent(context, oldRow, newRow);
+      _updateEventController.add(updateEvent);
+      _eventController.add(updateEvent);
     }
   }
 
-  void applyTransactionUpdate(BsatnRowList deletes, BsatnRowList inserts) {
+  /// Apply transaction update with event context
+  ///
+  /// Updates the cache with inserts/deletes from a transaction and emits
+  /// changes to streams. The EventContext contains metadata about what
+  /// caused the transaction (reducer name, caller, status, etc.).
+  ///
+  /// Phase 3 will add enhanced event streams that include the context.
+  void applyTransactionUpdate(
+    BsatnRowList deletes,
+    BsatnRowList inserts,
+    EventContext context,
+  ) {
     final changes = _applyChanges(deletes, inserts);
-    _emitChanges(changes);
+    _emitChanges(changes, context);
   }
 
   /// Returns the number of rows in the cache
@@ -260,8 +452,14 @@ class TableCache<T> {
     _rows.clear();
   }
 
-  void applyInitialData(BsatnRowList inserts) {
-    _decodeAndStoreRows(inserts);
+  /// Apply initial subscription data with event context
+  ///
+  /// Called when initial subscription data arrives. Emits events with
+  /// SubscribeAppliedEvent so users can distinguish initial load from updates.
+  void applyInitialData(BsatnRowList inserts, EventContext context) {
+    // Treat initial data as inserts with no deletes
+    final changes = _applyChanges(BsatnRowList.empty(), inserts);
+    _emitChanges(changes, context);
   }
 
   void applyInserts(BsatnRowList inserts) {

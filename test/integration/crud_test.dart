@@ -1,133 +1,108 @@
 import 'dart:async';
+import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
 import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
 import 'note_decoder.dart';
+import 'reducer_arg_decoders.dart';
 
-/// Test complete CRUD operations (Create, Read, Update, Delete)
-///
-/// Before running:
-/// 1. spacetime start
-/// 2. cd spacetime_test_module && spacetime publish notes-crud --server local
-/// 3. dart run test/integration/crud_test.dart
-void main() async {
-  print('🧪 Testing CRUD Operations\n');
+void main() {
+  // Increase timeout for integration tests involving network
+  test('CRUD operations (Create, Read, Update, Delete)', () async {
+    final connection = SpacetimeDbConnection(
+      host: 'localhost:3000',
+      database: 'notesdb',
+    );
 
-  final connection = SpacetimeDbConnection(
-    host: 'localhost:3000',
-    database: 'notesdb',
-  );
+    final subManager = SubscriptionManager(connection);
 
-  final subscriptionManager = SubscriptionManager(connection);
+    // 1. Register Table Decoder
+    subManager.cache.registerDecoder<Note>('note', NoteDecoder());
 
-  subscriptionManager.cache.registerDecoder<Note>('note', NoteDecoder());
+    // 2. Register Reducer Argument Decoders
+    subManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
-  // Manually activate for testing (normally happens during subscription)
-  subscriptionManager.cache.activateTable(4096, 'note');
+    print('📡 Connecting...');
+    await connection.connect();
 
-  // Get table by name (type-safe)
-  final noteTable = subscriptionManager.cache.getTableByTypedName<Note>('note');
+    // 2. Subscribe and Wait for the "Synced" state
+    subManager.subscribe(['SELECT * FROM note']);
+    await subManager.onInitialSubscription.first;
 
-  // Track inserts
-  noteTable.insertStream.listen((note) {
-    print('  ✅ Insert: ${note.title}');
-  });
+    final noteTable = subManager.cache.getTableByTypedName<Note>('note');
+    print('✅ Connected & Subscribed. Current count: ${noteTable.count()}');
 
-  // Track updates
-  noteTable.updateStream.listen((update) {
-    print('  🔄 Update: ${update.oldRow.title} → ${update.newRow.title}');
-  });
+    // Helper to wait for a specific update on the stream
+    Future<T> waitFor<T>(Stream<T> stream, bool Function(T) condition) {
+      return stream.firstWhere(condition).timeout(const Duration(seconds: 5));
+    }
 
-  // Track deletes
-  noteTable.deleteStream.listen((note) {
-    print('  ❌ Delete: ${note.title}');
-  });
+    // =========================================================================
+    // TEST 1: CREATE
+    // =========================================================================
+    final uniqueTitle = 'Note-${DateTime.now().millisecondsSinceEpoch}';
 
-  print('📡 Connecting...');
-  await connection.connect();
-  await subscriptionManager.onIdentityToken.first;
-  print('✅ Connected!\n');
+    // Start listening BEFORE calling the reducer to ensure we don't miss the event
+    final insertFuture = waitFor<Note>(
+        noteTable.insertStream, (note) => note.title == uniqueTitle);
 
-  // Subscribe to notes
-  subscriptionManager.subscribe(['SELECT * FROM note']);
-  await subscriptionManager.onInitialSubscription.first;
-  print('📚 Initial notes: ${noteTable.count()}');
-  for (final note in noteTable.iter()) {
-    print('   ${note.id}. ${note.title}');
-  }
+    print('📝 Action: Create Note');
+    await subManager.reducers.callWith('create_note', (encoder) {
+      encoder.writeString(uniqueTitle);
+      encoder.writeString('Content');
+    });
 
-  // =============================================================================
-  // TEST 1: CREATE
-  // =============================================================================
-  print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📝 TEST 1: CREATE a new note');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  await subscriptionManager.reducers.callWith('create_note', (encoder) {
-    encoder.writeString('CRUD Test Note');
-    encoder.writeString('This note will be updated and deleted');
-  });
-  await Future.delayed(Duration(seconds: 1));
+    // Wait for the SERVER to tell us it happened
+    final createdNote = await insertFuture;
 
-  print('📚 After CREATE: ${noteTable.count()} notes');
-  final createdNote = noteTable.iter().last;
-  final createdId = createdNote.id;
-  print('   Created note ID: $createdId\n');
+    expect(createdNote.title, equals(uniqueTitle));
+    expect(createdNote.id, isNotNull);
+    print('   ✅ Verified Insert via Stream: ID ${createdNote.id}');
 
-  // =============================================================================
-  // TEST 2: UPDATE
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔄 TEST 2: UPDATE the note');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  await subscriptionManager.reducers.callWith('update_note', (encoder) {
-    encoder.writeU32(createdId);
-    encoder.writeString('UPDATED: CRUD Test Note');
-    encoder.writeString('This note has been updated!');
-  });
-  await Future.delayed(Duration(seconds: 1));
+    // =========================================================================
+    // TEST 2: UPDATE
+    // =========================================================================
+    final updateFuture = waitFor(
+        noteTable.updateStream, (change) => change.newRow.id == createdNote.id);
 
-  print('📚 After UPDATE: ${noteTable.count()} notes');
-  final updatedNote = noteTable.find(createdId);
-  if (updatedNote != null) {
-    print('   Updated note: ${updatedNote.title}');
-    print('   Content: ${updatedNote.content}\n');
-  }
+    print('🔄 Action: Update Note');
+    await subManager.reducers.callWith('update_note', (encoder) {
+      encoder.writeU32(createdNote.id);
+      encoder.writeString('UPDATED $uniqueTitle');
+      encoder.writeString('New Content');
+    });
 
-  // =============================================================================
-  // TEST 3: DELETE
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🗑️  TEST 3: DELETE the note');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  await subscriptionManager.reducers.callWith('delete_note', (encoder) {
-    encoder.writeU32(createdId);
-  });
-  await Future.delayed(Duration(seconds: 1));
+    final change = await updateFuture;
 
-  print('📚 After DELETE: ${noteTable.count()} notes');
-  final deletedNote = noteTable.find(createdId);
-  if (deletedNote == null) {
-    print('   ✅ Note successfully deleted!\n');
-  } else {
-    print('   ❌ ERROR: Note still exists!\n');
-  }
+    expect(change.oldRow.title, equals(uniqueTitle));
+    expect(change.newRow.title, contains('UPDATED'));
 
-  // =============================================================================
-  // SUMMARY
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📊 FINAL STATE');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📚 Total notes: ${noteTable.count()}');
-  for (final note in noteTable.iter()) {
-    print('   ${note.id}. ${note.title}');
-  }
+    // Verify Cache State matches
+    final cachedNote = noteTable.find(createdNote.id);
+    expect(cachedNote?.title, contains('UPDATED'));
+    print('   ✅ Verified Update via Stream');
 
-  print('\n🎉 CRUD test complete!');
-  print('   ✅ CREATE works');
-  print('   ✅ UPDATE works');
-  print('   ✅ DELETE works\n');
+    // =========================================================================
+    // TEST 3: DELETE
+    // =========================================================================
+    final deleteFuture =
+        waitFor(noteTable.deleteStream, (note) => note.id == createdNote.id);
 
-  await Future.delayed(Duration(seconds: 1));
-  subscriptionManager.dispose();
-  await connection.disconnect();
+    print('🗑️  Action: Delete Note');
+    await subManager.reducers.callWith('delete_note', (encoder) {
+      encoder.writeU32(createdNote.id);
+    });
+
+    final deletedNote = await deleteFuture;
+    expect(deletedNote.id, equals(createdNote.id));
+
+    // Verify Cache State is clean
+    expect(noteTable.find(createdNote.id), isNull);
+    print('   ✅ Verified Delete via Stream');
+
+    // Cleanup
+    subManager.dispose();
+    await connection.disconnect();
+  }, timeout: const Timeout(Duration(seconds: 10))); // Test fails if > 10s
 }

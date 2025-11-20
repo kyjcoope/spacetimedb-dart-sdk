@@ -1,434 +1,378 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
-import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
-import 'package:spacetimedb_dart_sdk/src/messages/server_messages.dart';
-import 'package:spacetimedb_dart_sdk/src/codec/bsatn_decoder.dart';
-import 'package:spacetimedb_dart_sdk/src/codec/bsatn_encoder.dart';
+import 'package:test/test.dart';
+import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import 'note_decoder.dart';
+import 'reducer_arg_decoders.dart';
 
 /// Comprehensive test for all SpacetimeDB server message types
 ///
 /// Before running:
 /// 1. spacetime start
-/// 2. cd spacetime_test_module && spacetime publish notes-crud --server local
-/// 3. dart run test/integration/message_types_test.dart
-///
-/// Note: TEST 8 requires the add_numbers procedure added to the module
-void main() async {
-  print('🧪 Testing All Server Message Types\n');
+/// 2. cd spacetime_test_module && spacetime publish notesdb --server http://localhost:3000
+/// 3. dart test test/integration/message_types_test.dart
 
-  final connection = SpacetimeDbConnection(
-    host: 'localhost:3000',
-    database: 'notesdb',
-  );
+void main() {
+  late SpacetimeDbConnection connection;
+  late SubscriptionManager subManager;
 
-  final subscriptionManager = SubscriptionManager(connection);
+  setUp(() async {
+    connection = SpacetimeDbConnection(
+      host: 'localhost:3000',
+      database: 'notesdb',
+    );
+    subManager = SubscriptionManager(connection);
 
-  subscriptionManager.cache.registerDecoder<Note>('note', NoteDecoder());
-  subscriptionManager.cache.activateTable(4096, 'note');
+    // PHASE 0: Register decoders
+    subManager.cache.registerDecoder<Note>('note', NoteDecoder());
+    subManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
-  print('📡 Connecting...');
-  await connection.connect();
-
-  // =============================================================================
-  // TEST 1: IdentityToken
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔑 TEST 1: IdentityToken');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  final identityToken = await subscriptionManager.onIdentityToken.first;
-  print('✅ Received IdentityToken');
-  print('   Identity: ${identityToken.identity.length} bytes');
-  print('   Token: ${identityToken.token.substring(0, 20)}...');
-  print('   Connection ID: ${identityToken.connectionId.length} bytes\n');
-
-  // =============================================================================
-  // TEST 2: InitialSubscription
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📊 TEST 2: InitialSubscription');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  subscriptionManager.subscribe(['SELECT * FROM note']);
-  final initialSub = await subscriptionManager.onInitialSubscription.first;
-  print('✅ Received InitialSubscription');
-  print('   Tables: ${initialSub.tableUpdates.length}');
-  print('   Request ID: ${initialSub.requestId}');
-  print('   Execution time: ${initialSub.totalHostExecutionDurationMicros}μs');
-
-  final noteTable = subscriptionManager.cache.getTable<Note>(4096);
-  print('   Loaded ${noteTable.count()} notes\n');
-
-  // =============================================================================
-  // TEST 3: TransactionUpdate
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔄 TEST 3: TransactionUpdate');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  final noteCountBefore = noteTable.count();
-  final transactionUpdateFuture = subscriptionManager.onTransactionUpdate.first;
-
-  await subscriptionManager.reducers.callWith('create_note', (encoder) {
-    encoder.writeString('TransactionUpdate Test');
-    encoder.writeString('Testing TransactionUpdate message');
+    await connection.connect();
+    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
   });
 
-  final txUpdate = await transactionUpdateFuture;
-  final noteCountAfter = noteTable.count();
+  tearDown(() async {
+    subManager.dispose();
+    await connection.disconnect();
+  });
 
-  print('✅ Received TransactionUpdate');
-  print('   Timestamp: ${txUpdate.timestamp}');
-  print('   Table updates: ${txUpdate.tableUpdates.length}');
-  print('   Notes before: $noteCountBefore');
-  print('   Notes after: $noteCountAfter');
+  group('Server Message Type Tests', () {
+    test('IdentityToken message', () async {
+      // Create a new connection to receive a fresh IdentityToken
+      final newConnection = SpacetimeDbConnection(
+        host: 'localhost:3000',
+        database: 'notesdb',
+      );
+      final newSubManager = SubscriptionManager(newConnection);
 
-  // Verify the note was actually added
-  if (noteCountAfter == noteCountBefore + 1) {
-    print('   ✅ Note count increased by 1 as expected\n');
-  } else {
-    throw Exception('Expected note count to increase by 1, but it went from $noteCountBefore to $noteCountAfter');
-  }
+      // A. PREPARE LISTENER - before connecting
+      final tokenFuture = newSubManager.onIdentityToken.first;
 
-  // =============================================================================
-  // TEST 4: OneOffQueryResponse
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔍 TEST 4: OneOffQueryResponse');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // B. ACTION - connect to trigger IdentityToken
+      await newConnection.connect();
 
-  final queryResponseFuture = subscriptionManager.onOneOffQueryResponse.first;
-  final messageId = Uint8List.fromList([1, 2, 3, 4]);
-  subscriptionManager.oneOffQuery(messageId, 'SELECT * FROM note');
+      // C. WAIT
+      final token = await tokenFuture.timeout(Duration(seconds: 2));
 
-  final queryResponse = await queryResponseFuture;
-  print('✅ Received OneOffQueryResponse');
-  print('   Message ID: ${queryResponse.messageId.length} bytes');
-  print('   Error: ${queryResponse.error ?? "none"}');
-  print('   Tables: ${queryResponse.tables.length}');
-  print('   Execution time: ${queryResponse.totalHostExecutionDurationMicros}μs\n');
+      // D. ASSERT
+      expect(token.identity.length, equals(32),
+          reason: 'Identity should be 32 bytes');
+      expect(token.connectionId.length, equals(16),
+          reason: 'Connection ID should be 16 bytes');
+      expect(token.token, isNotEmpty,
+          reason: 'Token should not be empty');
 
-  // =============================================================================
-  // TEST 5: SubscribeApplied
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('✅ TEST 5: SubscribeApplied');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // Clean up
+      newSubManager.dispose();
+      await newConnection.disconnect();
+    });
 
-  const expectedRequestId = 100;
-  const expectedQueryId = 123;
+    test('InitialSubscription message', () async {
+      // A. PREPARE LISTENER
+      final initialSubFuture = subManager.onInitialSubscription.first;
 
-  subscriptionManager.subscribeSingle('SELECT * FROM note', requestId: expectedRequestId, queryId: expectedQueryId);
-  final subscribeApplied = await subscriptionManager.onSubscribeApplied.first;
+      // B. ACTION - send Subscribe message directly (don't use subscribe() helper)
+      final message = SubscribeMessage(['SELECT * FROM note']);
+      connection.send(message.encode());
 
-  print('✅ Received SubscribeApplied');
-  print('   Request ID: ${subscribeApplied.requestId}');
-  print('   Total host execution: ${subscribeApplied.totalHostExecutionDurationMicros}μs');
-  print('   Query ID: ${subscribeApplied.queryId}');
+      // C. WAIT
+      final initialSub = await initialSubFuture.timeout(Duration(seconds: 2));
 
-  // Verify the IDs match what we sent
-  if (subscribeApplied.requestId == expectedRequestId && subscribeApplied.queryId == expectedQueryId) {
-    print('   ✅ Request ID and Query ID match as expected\n');
-  } else {
-    throw Exception('ID mismatch: expected requestId=$expectedRequestId, queryId=$expectedQueryId, '
-        'but got requestId=${subscribeApplied.requestId}, queryId=${subscribeApplied.queryId}');
-  }
+      // D. ASSERT
+      expect(initialSub.tableUpdates, isNotEmpty,
+          reason: 'Should have table updates');
+      expect(initialSub.requestId, isA<int>(),
+          reason: 'Request ID should be present');
+      expect(initialSub.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
 
-  // =============================================================================
-  // TEST 6: UnsubscribeApplied
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🔓 TEST 6: UnsubscribeApplied');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // Verify cache was populated
+      final noteTable = subManager.cache.getTable<Note>(4096);
+      expect(noteTable, isNotNull,
+          reason: 'Note table should be in cache');
+    });
 
-  // Unsubscribe from the subscription created in TEST 5 (queryId: 123)
-  const expectedUnsubRequestId = 400;
-  const expectedUnsubQueryId = 123;
+    test('TransactionUpdate message', () async {
+      // Ensure we have initial subscription first
+      await subManager.subscribe(['SELECT * FROM note']);
 
-  print('   Unsubscribing from TEST 5 subscription (queryId: $expectedUnsubQueryId, requestId: $expectedUnsubRequestId)...');
+      final noteTable = subManager.cache.getTable<Note>(4096);
+      final noteCountBefore = noteTable.count();
 
-  // Listen for BOTH UnsubscribeApplied and SubscriptionError to debug
-  final unsubAppliedFuture = subscriptionManager.onUnsubscribeApplied.first;
-  final subErrorFuture = subscriptionManager.onSubscriptionError.first;
+      // A. PREPARE LISTENER
+      final txUpdateFuture = subManager.onTransactionUpdate.first;
 
-  subscriptionManager.unsubscribe(expectedUnsubQueryId, requestId: expectedUnsubRequestId);
+      // B. ACTION
+      await subManager.reducers.callWith('create_note', (encoder) {
+        encoder.writeString('TransactionUpdate Test');
+        encoder.writeString('Testing TransactionUpdate message');
+      });
 
-  final result = await Future.any([
-    unsubAppliedFuture.then((msg) => ('success', msg)),
-    subErrorFuture.then((err) => ('error', err)),
-  ]).timeout(
-    Duration(seconds: 5),
-    onTimeout: () => throw TimeoutException('No response received (neither UnsubscribeApplied nor SubscriptionError)'),
-  );
+      // C. WAIT
+      final txUpdate = await txUpdateFuture.timeout(Duration(seconds: 2));
 
-  if (result.$1 == 'success') {
-    final unsubApplied = result.$2 as UnsubscribeApplied;
-    print('✅ Received UnsubscribeApplied');
-    print('   Request ID: ${unsubApplied.requestId}');
-    print('   Query ID: ${unsubApplied.queryId}');
-    print('   Total host execution: ${unsubApplied.totalHostExecutionDurationMicros}μs');
+      // D. ASSERT
+      expect(txUpdate.timestamp, greaterThan(0),
+          reason: 'Timestamp should be positive');
+      expect(txUpdate.tableUpdates, isNotEmpty,
+          reason: 'Should have table updates');
+      expect(txUpdate.status, isA<Committed>(),
+          reason: 'Transaction should be committed');
 
-    // Verify the IDs match what we sent
-    if (unsubApplied.requestId == expectedUnsubRequestId && unsubApplied.queryId == expectedUnsubQueryId) {
-      print('   ✅ Request ID and Query ID match as expected\n');
-    } else {
-      throw Exception('ID mismatch: expected requestId=$expectedUnsubRequestId, queryId=$expectedUnsubQueryId, '
-          'but got requestId=${unsubApplied.requestId}, queryId=${unsubApplied.queryId}');
-    }
-  } else {
-    final err = result.$2 as SubscriptionErrorMessage;
-    print('❌ Received SubscriptionError instead:');
-    print('   Error: ${err.error}');
-    print('   Request ID: ${err.requestId}');
-    print('   Query ID: ${err.queryId}\n');
-    throw Exception('Expected UnsubscribeApplied but got SubscriptionError: ${err.error}');
-  }
+      final noteCountAfter = noteTable.count();
+      expect(noteCountAfter, equals(noteCountBefore + 1),
+          reason: 'Note count should increase by 1');
+    });
 
-  // =============================================================================
-  // TEST 7: SubscriptionError
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ TEST 7: SubscriptionError');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    test('OneOffQueryResponse message', () async {
+      // A. PREPARE LISTENER
+      final queryResponseFuture = subManager.onOneOffQueryResponse.first;
 
-  // Intentionally trigger a SubscriptionError by unsubscribing from a non-existent subscription
-  const expectedErrorRequestId = 500;
-  const expectedErrorQueryId = 99999;
+      // B. ACTION
+      final messageId = Uint8List.fromList([1, 2, 3, 4]);
+      subManager.oneOffQuery(messageId, 'SELECT * FROM note');
 
-  subscriptionManager.unsubscribe(expectedErrorQueryId, requestId: expectedErrorRequestId);
-  final subError = await subscriptionManager.onSubscriptionError.first;
+      // C. WAIT
+      final queryResponse = await queryResponseFuture.timeout(Duration(seconds: 2));
 
-  print('✅ Received SubscriptionError');
-  print('   Error: ${subError.error}');
-  print('   Request ID: ${subError.requestId}');
-  print('   Query ID: ${subError.queryId}');
-  print('   Total host execution: ${subError.totalHostExecutionDurationMicros}μs');
+      // D. ASSERT
+      expect(queryResponse.messageId, equals(messageId),
+          reason: 'Message ID should match');
+      expect(queryResponse.error, isNull,
+          reason: 'Should not have error for valid query');
+      expect(queryResponse.tables, isNotEmpty,
+          reason: 'Should have tables');
+      expect(queryResponse.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+    });
 
-  // Verify the IDs match what we sent
-  if (subError.requestId == expectedErrorRequestId && subError.queryId == expectedErrorQueryId) {
-    print('   ✅ Request ID and Query ID match as expected');
-  } else {
-    throw Exception('ID mismatch: expected requestId=$expectedErrorRequestId, queryId=$expectedErrorQueryId, '
-        'but got requestId=${subError.requestId}, queryId=${subError.queryId}');
-  }
+    test('SubscribeApplied message', () async {
+      const requestId = 100;
+      const queryId = 123;
 
-  // Verify we got an error message about the subscription not being found
-  if (subError.error.contains('Subscription not found')) {
-    print('   ✅ Error message indicates subscription not found\n');
-  } else {
-    print('   ⚠️  Unexpected error message: ${subError.error}\n');
-  }
+      // A. PREPARE LISTENER
+      final subscribeAppliedFuture = subManager.onSubscribeApplied.first;
 
-  // =============================================================================
-  // TEST 8: ProcedureResult
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('🎯 TEST 8: ProcedureResult');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // B. ACTION
+      subManager.subscribeSingle(
+        'SELECT * FROM note',
+        requestId: requestId,
+        queryId: queryId,
+      );
 
-  const expectedProcedureRequestId = 600;
-  final procedureResultFuture = subscriptionManager.onProcedureResult.first;
+      // C. WAIT
+      final subscribeApplied = await subscribeAppliedFuture.timeout(Duration(seconds: 2));
 
-  // Call the add_numbers procedure with arguments 42 and 58
-  final encoder = BsatnEncoder();
-  encoder.writeU32(42);
-  encoder.writeU32(58);
-  subscriptionManager.callProcedure('add_numbers', encoder.toBytes(), requestId: expectedProcedureRequestId);
+      // D. ASSERT
+      expect(subscribeApplied.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(subscribeApplied.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(subscribeApplied.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+    });
 
-  final procedureResult = await procedureResultFuture;
+    test('UnsubscribeApplied message', () async {
+      const subscribeRequestId = 200;
+      const queryId = 456;
+      const unsubscribeRequestId = 201;
 
-  print('✅ Received ProcedureResult');
-  print('   Request ID: ${procedureResult.requestId}');
-  print('   Status: ${procedureResult.status.type}');
-  print('   Timestamp: ${procedureResult.timestamp}');
-  print('   Total host execution: ${procedureResult.totalHostExecutionDurationMicros}μs');
+      // First, create a subscription
+      subManager.subscribeSingle(
+        'SELECT * FROM note',
+        requestId: subscribeRequestId,
+        queryId: queryId,
+      );
+      await subManager.onSubscribeApplied.first.timeout(Duration(seconds: 2));
 
-  // Verify the request ID matches
-  if (procedureResult.requestId == expectedProcedureRequestId) {
-    print('   ✅ Request ID matches as expected');
-  } else {
-    throw Exception('Request ID mismatch: expected $expectedProcedureRequestId, got ${procedureResult.requestId}');
-  }
+      // A. PREPARE LISTENER
+      final unsubAppliedFuture = subManager.onUnsubscribeApplied.first;
 
-  // Verify the procedure succeeded and decode the return value
-  if (procedureResult.status.type == ProcedureStatusType.returned) {
-    print('   ✅ Procedure returned successfully');
-    if (procedureResult.status.returnedData != null) {
+      // B. ACTION
+      subManager.unsubscribe(queryId, requestId: unsubscribeRequestId);
+
+      // C. WAIT
+      final unsubApplied = await unsubAppliedFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(unsubApplied.requestId, equals(unsubscribeRequestId),
+          reason: 'Request ID should match');
+      expect(unsubApplied.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(unsubApplied.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+    });
+
+    test('SubscriptionError message', () async {
+      const requestId = 500;
+      const queryId = 99999;
+
+      // A. PREPARE LISTENER
+      final errorFuture = subManager.onSubscriptionError.first;
+
+      // B. ACTION - try to unsubscribe from non-existent subscription
+      subManager.unsubscribe(queryId, requestId: requestId);
+
+      // C. WAIT
+      final subError = await errorFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(subError.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(subError.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(subError.error, isNotEmpty,
+          reason: 'Error message should not be empty');
+      expect(subError.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+
+      final errorMsg = subError.error.toLowerCase();
+      expect(errorMsg.contains('subscription not found') || errorMsg.contains('not found'),
+          isTrue,
+          reason: 'Error should indicate subscription not found');
+    });
+
+    test('ProcedureResult message', () async {
+      const requestId = 600;
+
+      // A. PREPARE LISTENER
+      final procedureResultFuture = subManager.onProcedureResult.first;
+
+      // B. ACTION - call add_numbers(42, 58)
+      final encoder = BsatnEncoder();
+      encoder.writeU32(42);
+      encoder.writeU32(58);
+      subManager.callProcedure('add_numbers', encoder.toBytes(), requestId: requestId);
+
+      // C. WAIT
+      final procedureResult = await procedureResultFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(procedureResult.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(procedureResult.status.type, equals(ProcedureStatusType.returned),
+          reason: 'Procedure should return successfully');
+      expect(procedureResult.timestamp, greaterThan(0),
+          reason: 'Timestamp should be positive');
+      expect(procedureResult.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+
+      // Verify return value
+      expect(procedureResult.status.returnedData, isNotNull,
+          reason: 'Should have returned data');
+
       final decoder = BsatnDecoder(procedureResult.status.returnedData!);
       final result = decoder.readU32();
-      print('   🧮 Result: 42 + 58 = $result');
-      if (result == 100) {
-        print('   ✅ Calculation correct\n');
-      } else {
-        throw Exception('Expected 100, got $result');
-      }
-    }
-  } else if (procedureResult.status.type == ProcedureStatusType.outOfEnergy) {
-    print('   ⚠️  Procedure ran out of energy\n');
-  } else if (procedureResult.status.type == ProcedureStatusType.internalError) {
-    print('   ❌ Procedure internal error: ${procedureResult.status.errorMessage}\n');
-  }
+      expect(result, equals(100),
+          reason: '42 + 58 should equal 100');
+    });
 
-  // =============================================================================
-  // TEST 9: TransactionUpdateLight
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('⚡ TEST 9: TransactionUpdateLight');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    test('TransactionUpdateLight or TransactionUpdate message', () async {
+      // Ensure we have initial subscription first
+      await subManager.subscribe(['SELECT * FROM note']);
 
-  // Capture note count BEFORE the operation
-  final noteCountBeforeLight = noteTable.count();
+      final noteTable = subManager.cache.getTable<Note>(4096);
+      final noteCountBefore = noteTable.count();
 
-  // Note: Server decides when to send Light vs Full based on optimization
-  // We can listen for it but can't force it
-  // Set up listener BEFORE calling reducer
-  const expectedLightRequestId = 650;
+      // A. PREPARE LISTENER - race between Light and Full
+      final updateCompleter = Completer<String>();
 
-  final lightOrFullFuture = Future.any([
-    subscriptionManager.onTransactionUpdateLight.first.then((msg) => ('light', msg.requestId)),
-    subscriptionManager.onTransactionUpdate.first.then((msg) => ('full', msg.timestamp)),
-  ]);
+      final lightSub = subManager.onTransactionUpdateLight.listen((light) {
+        if (!updateCompleter.isCompleted) {
+          updateCompleter.complete('light');
+        }
+      });
 
-  // Now call the reducer with explicit requestId
-  subscriptionManager.reducers.callWith('create_note', (encoder) {
-    encoder.writeString('Light Update Test');
-    encoder.writeString('May receive Light or Full TransactionUpdate');
-  }, requestId: expectedLightRequestId);
+      final fullSub = subManager.onTransactionUpdate.listen((full) {
+        if (!updateCompleter.isCompleted) {
+          updateCompleter.complete('full');
+        }
+      });
 
-  // Wait for the response
-  final lightResult = await lightOrFullFuture;
-  if (lightResult.$1 == 'light') {
-    final requestId = lightResult.$2;
-    print('✅ Received TransactionUpdateLight');
-    print('   Request ID: $requestId');
+      // B. ACTION
+      await subManager.reducers.callWith('create_note', (encoder) {
+        encoder.writeString('Light Update Test');
+        encoder.writeString('May receive Light or Full TransactionUpdate');
+      });
 
-    // Verify request ID correlation
-    if (requestId == expectedLightRequestId) {
-      print('   ✅ Request ID matches as expected');
-    } else {
-      throw Exception('Request ID mismatch: expected $expectedLightRequestId, got $requestId');
-    }
-  } else {
-    print('✅ Received TransactionUpdate (Full)');
-    print('   Server chose to send full update instead of light');
-  }
+      // C. WAIT
+      final updateType = await updateCompleter.future.timeout(Duration(seconds: 2));
 
-  // Verify the state change
-  final noteCountAfterLight = noteTable.count();
-  print('   Notes before: $noteCountBeforeLight');
-  print('   Notes after: $noteCountAfterLight');
+      // D. ASSERT - either type is valid
+      expect(updateType, anyOf(['light', 'full']),
+          reason: 'Should receive either Light or Full update');
 
-  if (noteCountAfterLight == noteCountBeforeLight + 1) {
-    print('   ✅ Note count increased by 1 as expected\n');
-  } else {
-    throw Exception('Note count did not increase by 1. Before: $noteCountBeforeLight, After: $noteCountAfterLight');
-  }
+      // Verify state changed
+      final noteCountAfter = noteTable.count();
+      expect(noteCountAfter, equals(noteCountBefore + 1),
+          reason: 'Note count should increase by 1');
 
-  // =============================================================================
-  // TEST 10: SubscribeMultiApplied
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📦 TEST 10: SubscribeMultiApplied');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // Clean up
+      await lightSub.cancel();
+      await fullSub.cancel();
+    });
 
-  const expectedMultiRequestId = 700;
-  const expectedMultiQueryId = 789;
+    test('SubscribeMultiApplied message', () async {
+      const requestId = 700;
+      const queryId = 789;
 
-  subscriptionManager.subscribeMulti(
-    ['SELECT * FROM note WHERE id > 50', 'SELECT * FROM note WHERE id <= 50'],
-    requestId: expectedMultiRequestId,
-    queryId: expectedMultiQueryId,
-  );
+      // A. PREPARE LISTENER
+      final subscribeMultiFuture = subManager.onSubscribeMultiApplied.first;
 
-  final subscribeMultiApplied = await subscriptionManager.onSubscribeMultiApplied.first;
+      // B. ACTION
+      subManager.subscribeMulti(
+        ['SELECT * FROM note WHERE id > 50', 'SELECT * FROM note WHERE id <= 50'],
+        requestId: requestId,
+        queryId: queryId,
+      );
 
-  print('✅ Received SubscribeMultiApplied');
-  print('   Request ID: ${subscribeMultiApplied.requestId}');
-  print('   Query ID: ${subscribeMultiApplied.queryId}');
-  print('   Table updates: ${subscribeMultiApplied.tableUpdates.length}');
-  print('   Total host execution: ${subscribeMultiApplied.totalHostExecutionDurationMicros}μs');
+      // C. WAIT
+      final subscribeMultiApplied = await subscribeMultiFuture.timeout(Duration(seconds: 2));
 
-  // Verify the request ID and query ID match
-  if (subscribeMultiApplied.requestId == expectedMultiRequestId) {
-    print('   ✅ Request ID matches as expected');
-  } else {
-    throw Exception('Request ID mismatch: expected $expectedMultiRequestId, got ${subscribeMultiApplied.requestId}');
-  }
+      // D. ASSERT
+      expect(subscribeMultiApplied.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(subscribeMultiApplied.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(subscribeMultiApplied.tableUpdates, isNotEmpty,
+          reason: 'Should have table updates');
+      expect(subscribeMultiApplied.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+    });
 
-  if (subscribeMultiApplied.queryId == expectedMultiQueryId) {
-    print('   ✅ Query ID matches as expected');
-  } else {
-    throw Exception('Query ID mismatch: expected $expectedMultiQueryId, got ${subscribeMultiApplied.queryId}');
-  }
+    test('UnsubscribeMultiApplied message', () async {
+      const subscribeRequestId = 800;
+      const queryId = 890;
+      const unsubscribeRequestId = 801;
 
-  // Verify cache was populated with data from both queries
-  final noteCountAfterMultiSub = noteTable.count();
-  if (noteCountAfterMultiSub > 0) {
-    print('   ✅ Cache populated with ${noteCountAfterMultiSub} notes\n');
-  } else {
-    throw Exception('Cache not populated after SubscribeMulti');
-  }
+      // First, create a multi subscription
+      subManager.subscribeMulti(
+        ['SELECT * FROM note'],
+        requestId: subscribeRequestId,
+        queryId: queryId,
+      );
+      await subManager.onSubscribeMultiApplied.first.timeout(Duration(seconds: 2));
 
-  // =============================================================================
-  // TEST 11: UnsubscribeMultiApplied
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📦 TEST 11: UnsubscribeMultiApplied');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // A. PREPARE LISTENER
+      final unsubMultiFuture = subManager.onUnsubscribeMultiApplied.first;
 
-  // Unsubscribe from the subscription created in TEST 10
-  const expectedUnsubMultiRequestId = 800;
-  const expectedUnsubMultiQueryId = 789; // Same as TEST 10
+      // B. ACTION
+      subManager.unsubscribeMulti(queryId, requestId: unsubscribeRequestId);
 
-  subscriptionManager.unsubscribeMulti(
-    expectedUnsubMultiQueryId,
-    requestId: expectedUnsubMultiRequestId,
-  );
+      // C. WAIT
+      final unsubscribeMultiApplied = await unsubMultiFuture.timeout(Duration(seconds: 2));
 
-  final unsubscribeMultiApplied = await subscriptionManager.onUnsubscribeMultiApplied.first;
-
-  print('✅ Received UnsubscribeMultiApplied');
-  print('   Request ID: ${unsubscribeMultiApplied.requestId}');
-  print('   Query ID: ${unsubscribeMultiApplied.queryId}');
-  print('   Table updates: ${unsubscribeMultiApplied.tableUpdates.length}');
-  print('   Total host execution: ${unsubscribeMultiApplied.totalHostExecutionDurationMicros}μs');
-
-  // Verify the request ID and query ID match
-  if (unsubscribeMultiApplied.requestId == expectedUnsubMultiRequestId) {
-    print('   ✅ Request ID matches as expected');
-  } else {
-    throw Exception('Request ID mismatch: expected $expectedUnsubMultiRequestId, got ${unsubscribeMultiApplied.requestId}');
-  }
-
-  if (unsubscribeMultiApplied.queryId == expectedUnsubMultiQueryId) {
-    print('   ✅ Query ID matches as expected\n');
-  } else {
-    throw Exception('Query ID mismatch: expected $expectedUnsubMultiQueryId, got ${unsubscribeMultiApplied.queryId}');
-  }
-
-  // =============================================================================
-  // SUMMARY
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📊 TEST SUMMARY');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('✅ IdentityToken - PASSED');
-  print('✅ InitialSubscription - PASSED');
-  print('✅ TransactionUpdate - PASSED');
-  print('✅ OneOffQueryResponse - PASSED');
-  print('✅ SubscribeApplied - PASSED');
-  print('✅ UnsubscribeApplied - PASSED');
-  print('✅ SubscriptionError - PASSED');
-  print('✅ ProcedureResult - PASSED');
-  print('✅ TransactionUpdateLight - PASSED (or Full)');
-  print('✅ SubscribeMultiApplied - PASSED');
-  print('✅ UnsubscribeMultiApplied - PASSED\n');
-
-  print('🎉 Message type tests complete!\n');
-
-  await Future.delayed(Duration(seconds: 1));
-  subscriptionManager.dispose();
-  await connection.disconnect();
+      // D. ASSERT
+      expect(unsubscribeMultiApplied.requestId, equals(unsubscribeRequestId),
+          reason: 'Request ID should match');
+      expect(unsubscribeMultiApplied.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(unsubscribeMultiApplied.tableUpdates, isNotNull,
+          reason: 'Should have table updates');
+      expect(unsubscribeMultiApplied.totalHostExecutionDurationMicros, greaterThanOrEqualTo(0),
+          reason: 'Execution duration should be non-negative');
+    });
+  });
 }

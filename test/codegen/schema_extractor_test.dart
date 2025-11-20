@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
+import 'test_helpers.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/models.dart';
 
 void main() {
@@ -114,7 +115,8 @@ WARNING: at start
     }, tags: ['integration']);
 
     test('fromWasm - successfully extracts schema from WASM file', () async {
-      final wasmPath = 'test/fixtures/spacetime_test_module.wasm';
+      final sdkRoot = findSdkRoot();
+      final wasmPath = '$sdkRoot/test/fixtures/spacetime_test_module.wasm';
 
       // Guard against environment issues (don't fail if fixture is missing)
       if (!File(wasmPath).existsSync()) {
@@ -150,7 +152,8 @@ WARNING: at start
     });
 
     test('fromProject - successfully builds and extracts schema', () async {
-      final projectPath = 'spacetime_test_module';
+      final sdkRoot = findSdkRoot();
+      final projectPath = '$sdkRoot/spacetime_test_module';
 
       // Guard against environment issues (don't fail if project is missing)
       if (!Directory(projectPath).existsSync()) {
@@ -209,8 +212,10 @@ WARNING: at start
 
   group('SchemaExtractor - Integration Tests', () {
     test('all three methods produce equivalent schemas', () async {
-      // Use spacetime_test_module from the project, or override with env var
-      final testProjectPath = Platform.environment['SPACETIME_TEST_PROJECT'] ?? 'spacetime_test_module';
+      final sdkRoot = findSdkRoot();
+
+      // Use spacetime_test_module from the project root, or override with env var
+      final testProjectPath = Platform.environment['SPACETIME_TEST_PROJECT'] ?? '$sdkRoot/spacetime_test_module';
 
       // Extract from project (builds WASM)
       final schemaFromProject = await SchemaExtractor.fromProject(

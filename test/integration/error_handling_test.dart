@@ -1,310 +1,225 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
-import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
-import 'package:spacetimedb_dart_sdk/src/messages/server_messages.dart';
-import 'package:spacetimedb_dart_sdk/src/codec/bsatn_encoder.dart';
+import 'package:test/test.dart';
+import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import 'note_decoder.dart';
+import 'reducer_arg_decoders.dart';
 
 /// Error handling and failure mode tests for SpacetimeDB Dart SDK
 ///
 /// Before running:
 /// 1. spacetime start
-/// 2. cd spacetime_test_module && spacetime publish notes-crud --server local
-/// 3. dart run test/integration/error_handling_test.dart
-///
-/// IMPORTANT NOTES:
-/// - Some tests require error-inducing procedures (divide_by_zero) in the module
-/// - ERROR TEST 4 & 5 are NON-DETERMINISTIC and rely on timeout behavior
-/// - These tests may be flaky in different network/server conditions (CI, slow networks)
-/// - SpacetimeDB does not always send explicit error messages for invalid calls
-/// - Timeout-based tests use 5-second timeouts to reduce false positives
-/// - Consider these limitations when interpreting test results in CI/CD pipelines
-///
-/// For robust error detection, ideally SpacetimeDB would:
-/// - Send explicit error messages for invalid reducer arguments
-/// - Send error responses for BSATN decoding failures
-/// - Provide consistent error feedback across all operation types
-void main() async {
-  print('🧪 Testing Error Handling & Failure Modes\n');
+/// 2. cd spacetime_test_module && spacetime publish notesdb --server http://localhost:3000
+/// 3. dart test test/integration/error_handling_test.dart
 
-  final connection = SpacetimeDbConnection(
-    host: 'localhost:3000',
-    database: 'notesdb',
-  );
+void main() {
+  late SpacetimeDbConnection connection;
+  late SubscriptionManager subManager;
 
-  final subscriptionManager = SubscriptionManager(connection);
+  setUp(() async {
+    connection = SpacetimeDbConnection(
+      host: 'localhost:3000',
+      database: 'notesdb',
+    );
+    subManager = SubscriptionManager(connection);
 
-  subscriptionManager.cache.registerDecoder<Note>('note', NoteDecoder());
-  subscriptionManager.cache.activateTable(4096, 'note');
+    // PHASE 0: Register decoders
+    subManager.cache.registerDecoder<Note>('note', NoteDecoder());
+    subManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());
+    subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
-  print('📡 Connecting...');
-  await connection.connect();
-  await subscriptionManager.onIdentityToken.first;
-  print('✅ Connected\n');
+    await connection.connect();
+    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
+  });
 
-  // =============================================================================
-  // ERROR TEST 1: Invalid Procedure Name
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 1: Non-existent Procedure');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  tearDown(() async {
+    subManager.dispose();
+    await connection.disconnect();
+  });
 
-  const nonExistentProcRequestId = 1001;
-  final nonExistentProcFuture = subscriptionManager.onProcedureResult.first;
+  group('Error Handling Tests', () {
+    test('Non-existent procedure returns internalError', () async {
+      const requestId = 1001;
 
-  subscriptionManager.callProcedure('non_existent_procedure', Uint8List(0), requestId: nonExistentProcRequestId);
+      // A. PREPARE LISTENER
+      final resultFuture = subManager.onProcedureResult
+          .firstWhere((msg) => msg.requestId == requestId);
 
-  final nonExistentResult = await nonExistentProcFuture;
-
-  print('✅ Received ProcedureResult');
-  print('   Request ID: ${nonExistentResult.requestId}');
-  print('   Status: ${nonExistentResult.status.type}');
-
-  // Verify request ID matches
-  if (nonExistentResult.requestId == nonExistentProcRequestId) {
-    print('   ✅ Request ID matches as expected');
-  } else {
-    throw Exception('Request ID mismatch: expected $nonExistentProcRequestId, got ${nonExistentResult.requestId}');
-  }
-
-  if (nonExistentResult.status.type == ProcedureStatusType.internalError) {
-    print('   ✅ Correctly returned internalError status');
-    print('   Error message: ${nonExistentResult.status.errorMessage}');
-
-    if ((nonExistentResult.status.errorMessage?.contains('not found') ?? false) ||
-        (nonExistentResult.status.errorMessage?.contains('No such procedure') ?? false)) {
-      print('   ✅ Error message indicates procedure not found\n');
-    } else {
-      print('   ⚠️  Unexpected error message\n');
-    }
-  } else {
-    throw Exception('Expected internalError, got ${nonExistentResult.status.type}');
-  }
-
-  // =============================================================================
-  // ERROR TEST 2: Invalid Subscription Query
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 2: Invalid SQL Query');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  const invalidQueryRequestId = 1002;
-  const invalidQueryId = 9999;
-
-  subscriptionManager.subscribeSingle(
-    'SELECT * FROM non_existent_table',
-    requestId: invalidQueryRequestId,
-    queryId: invalidQueryId,
-  );
-
-  final subscriptionError = await subscriptionManager.onSubscriptionError.first;
-
-  print('✅ Received SubscriptionError');
-  print('   Request ID: ${subscriptionError.requestId}');
-  print('   Query ID: ${subscriptionError.queryId}');
-  print('   Error: ${subscriptionError.error}');
-
-  if (subscriptionError.requestId == invalidQueryRequestId &&
-      subscriptionError.queryId == invalidQueryId) {
-    print('   ✅ Request ID and Query ID match as expected');
-  } else {
-    throw Exception('ID mismatch in error response');
-  }
-
-  if (subscriptionError.error.contains('table') ||
-      subscriptionError.error.contains('not found') ||
-      subscriptionError.error.contains('does not exist')) {
-    print('   ✅ Error message indicates table not found\n');
-  } else {
-    print('   ⚠️  Unexpected error message\n');
-  }
-
-  // =============================================================================
-  // ERROR TEST 3: Unsubscribe Non-existent Subscription
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 3: Unsubscribe Non-existent');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  const nonExistentSubRequestId = 1003;
-  const nonExistentSubQueryId = 88888;
-
-  subscriptionManager.unsubscribe(nonExistentSubQueryId, requestId: nonExistentSubRequestId);
-
-  final unsubError = await subscriptionManager.onSubscriptionError.first;
-
-  print('✅ Received SubscriptionError');
-  print('   Request ID: ${unsubError.requestId}');
-  print('   Query ID: ${unsubError.queryId}');
-  print('   Error: ${unsubError.error}');
-
-  if (unsubError.requestId == nonExistentSubRequestId &&
-      unsubError.queryId == nonExistentSubQueryId) {
-    print('   ✅ Request ID and Query ID match as expected');
-  } else {
-    throw Exception('ID mismatch in error response');
-  }
-
-  if (unsubError.error.contains('Subscription not found') ||
-      unsubError.error.contains('not found')) {
-    print('   ✅ Error message indicates subscription not found\n');
-  } else {
-    print('   ⚠️  Unexpected error message\n');
-  }
-
-  // =============================================================================
-  // ERROR TEST 4: Invalid Reducer Arguments
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 4: Invalid Reducer Arguments');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('   NOTE: This test is non-deterministic and relies on timeout behavior.');
-  print('   SpacetimeDB does not send explicit error messages for invalid reducer args.');
-  print('   Test may be flaky in different network/server conditions.\n');
-
-  // Reducers send TransactionUpdate on success, but no error message on failure
-  // We listen for both TransactionUpdate and SubscriptionError with timeout
-  final invalidArgsUpdate = Future.any([
-    subscriptionManager.onTransactionUpdate.first.then((_) => 'success'),
-    subscriptionManager.onSubscriptionError.first.then((_) => 'error'),
-  ]);
-
-  const invalidArgsRequestId = 1004;
-
-  // Call create_note with wrong number of arguments (expects 2 strings, send 0)
-  await subscriptionManager.reducers.callWith('create_note', (encoder) {
-    // Send nothing - wrong number of arguments
-  }, requestId: invalidArgsRequestId);
-
-  try {
-    // Increased timeout to 5 seconds to reduce false positives in slow environments
-    final result = await invalidArgsUpdate.timeout(Duration(seconds: 5));
-
-    if (result == 'success') {
-      print('   ⚠️  Server accepted invalid arguments (reducer succeeded)');
-      print('   SpacetimeDB may use default values or have lenient argument parsing\n');
-    } else {
-      print('   ✅ Received SubscriptionError for invalid arguments\n');
-    }
-  } on TimeoutException {
-    print('   ⚠️  Timeout - no response received');
-    print('   This could indicate:');
-    print('   - Server silently rejected invalid arguments (expected)');
-    print('   - Network/server latency (false positive)');
-    print('   - Consider this test result with caution\n');
-  }
-
-  // =============================================================================
-  // ERROR TEST 5: Procedure with Wrong Argument Types
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 5: Wrong Argument Types');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('   NOTE: This test may timeout if BSATN decoding fails before procedure execution.');
-  print('   Timeout behavior is non-deterministic across environments.\n');
-
-  const wrongTypesRequestId = 1005;
-  final wrongTypesProcFuture = subscriptionManager.onProcedureResult.first;
-
-  // add_numbers expects (u32, u32), send strings instead
-  final wrongTypesEncoder = BsatnEncoder();
-  wrongTypesEncoder.writeString('not a number');
-  wrongTypesEncoder.writeString('also not a number');
-
-  subscriptionManager.callProcedure('add_numbers', wrongTypesEncoder.toBytes(), requestId: wrongTypesRequestId);
-
-  final wrongTypesResult = await wrongTypesProcFuture.timeout(
-    Duration(seconds: 5), // Increased timeout for slow environments
-    onTimeout: () {
-      print('   ⚠️  Timeout - no response received');
-      print('   This could indicate:');
-      print('   - BSATN decoding failed on server (expected)');
-      print('   - Network/server latency (false positive)');
-      print('   - Consider this test result with caution\n');
-      return ProcedureResultMessage(
-        status: ProcedureStatus(type: ProcedureStatusType.returned),
-        timestamp: 0,
-        totalHostExecutionDurationMicros: 0,
-        requestId: 0,
+      // B. ACTION
+      subManager.callProcedure(
+        'non_existent_procedure',
+        Uint8List(0),
+        requestId: requestId,
       );
-    },
-  );
 
-  // Only check requestId if we didn't timeout (requestId != 0)
-  if (wrongTypesResult.requestId != 0) {
-    if (wrongTypesResult.requestId == wrongTypesRequestId) {
-      print('   ✅ Request ID matches as expected');
-    } else {
-      throw Exception('Request ID mismatch: expected $wrongTypesRequestId, got ${wrongTypesResult.requestId}');
-    }
+      // C. WAIT
+      final result = await resultFuture.timeout(Duration(seconds: 2));
 
-    if (wrongTypesResult.status.type == ProcedureStatusType.internalError) {
-      print('   ✅ Received error for wrong argument types');
-      print('   Error: ${wrongTypesResult.status.errorMessage}\n');
-    } else {
-      print('   ⚠️  Server accepted wrong argument types\n');
-    }
-  }
-  // If requestId == 0, timeout message was already printed
+      // D. ASSERT
+      expect(result.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(result.status.type, equals(ProcedureStatusType.internalError),
+          reason: 'Non-existent procedure should return internalError');
+      expect(result.status.errorMessage, isNotNull,
+          reason: 'Error message should be present');
 
-  // =============================================================================
-  // ERROR TEST 6: Procedure That Panics (divide_by_zero)
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('❌ ERROR TEST 6: Procedure Panic (Division by Zero)');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      final errorMsg = result.status.errorMessage!.toLowerCase();
+      expect(
+        errorMsg.contains('not found') || errorMsg.contains('no such procedure'),
+        isTrue,
+        reason: 'Error message should indicate procedure not found',
+      );
+    });
 
-  const divByZeroRequestId = 1006;
-  final divByZeroProcFuture = subscriptionManager.onProcedureResult.first;
+    test('Invalid SQL query returns SubscriptionError', () async {
+      const requestId = 1002;
+      const queryId = 9999;
 
-  final divEncoder = BsatnEncoder();
-  divEncoder.writeU32(100);
-  subscriptionManager.callProcedure('divide_by_zero', divEncoder.toBytes(), requestId: divByZeroRequestId);
+      // A. PREPARE LISTENER
+      final errorFuture = subManager.onSubscriptionError
+          .firstWhere((err) => err.requestId == requestId);
 
-  final divByZeroResult = await divByZeroProcFuture;
+      // B. ACTION
+      subManager.subscribeSingle(
+        'SELECT * FROM non_existent_table',
+        requestId: requestId,
+        queryId: queryId,
+      );
 
-  print('✅ Received ProcedureResult');
-  print('   Request ID: ${divByZeroResult.requestId}');
-  print('   Status: ${divByZeroResult.status.type}');
+      // C. WAIT
+      final error = await errorFuture.timeout(Duration(seconds: 2));
 
-  // Verify request ID matches
-  if (divByZeroResult.requestId == divByZeroRequestId) {
-    print('   ✅ Request ID matches as expected');
-  } else {
-    throw Exception('Request ID mismatch: expected $divByZeroRequestId, got ${divByZeroResult.requestId}');
-  }
+      // D. ASSERT
+      expect(error.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(error.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(error.error, isNotEmpty,
+          reason: 'Error message should not be empty');
 
-  if (divByZeroResult.status.type == ProcedureStatusType.internalError) {
-    print('   ✅ Correctly returned internalError status');
-    print('   Error message: ${divByZeroResult.status.errorMessage}');
+      final errorMsg = error.error.toLowerCase();
+      expect(
+        errorMsg.contains('table') ||
+            errorMsg.contains('not found') ||
+            errorMsg.contains('does not exist'),
+        isTrue,
+        reason: 'Error should indicate table not found',
+      );
+    });
 
-    if ((divByZeroResult.status.errorMessage?.contains('divide') ?? false) ||
-        (divByZeroResult.status.errorMessage?.contains('panic') ?? false)) {
-      print('   ✅ Error message indicates division error\n');
-    } else {
-      print('   ⚠️  Unexpected error message (but error was caught)\n');
-    }
-  } else {
-    print('   ⚠️  Expected internalError, got ${divByZeroResult.status.type}\n');
-  }
+    test('Unsubscribe non-existent subscription returns error', () async {
+      const requestId = 1003;
+      const queryId = 88888;
 
-  // =============================================================================
-  // SUMMARY
-  // =============================================================================
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('📊 ERROR HANDLING TEST SUMMARY');
-  print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  print('✅ Non-existent Procedure - TESTED');
-  print('✅ Invalid SQL Query - TESTED');
-  print('✅ Unsubscribe Non-existent - TESTED');
-  print('⚠️  Invalid Reducer Arguments - TESTED (may vary)');
-  print('⚠️  Wrong Argument Types - TESTED (may vary)');
-  print('✅ Procedure Panic (Divide by Zero) - TESTED\n');
+      // A. PREPARE LISTENER
+      final errorFuture = subManager.onSubscriptionError
+          .firstWhere((err) => err.requestId == requestId);
 
-  print('🎉 Error handling tests complete!\n');
+      // B. ACTION
+      subManager.unsubscribe(queryId, requestId: requestId);
 
-  await Future.delayed(Duration(seconds: 1));
-  subscriptionManager.dispose();
-  await connection.disconnect();
+      // C. WAIT
+      final error = await errorFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(error.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(error.queryId, equals(queryId),
+          reason: 'Query ID should match');
+      expect(error.error, isNotEmpty,
+          reason: 'Error message should not be empty');
+
+      final errorMsg = error.error.toLowerCase();
+      expect(
+        errorMsg.contains('subscription not found') ||
+            errorMsg.contains('not found'),
+        isTrue,
+        reason: 'Error should indicate subscription not found',
+      );
+    });
+
+    test('Invalid reducer arguments are handled', () async {
+      // A. PREPARE LISTENER - just wait for next transaction
+      final updateFuture = subManager.onTransactionUpdate.first;
+
+      // B. ACTION - send invalid args (0 arguments instead of 2 strings)
+      await subManager.reducers.callWith('create_note', (encoder) {
+        // Send nothing - wrong number of arguments
+      });
+
+      // C. WAIT
+      final update = await updateFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT - server accepted with defaults
+      expect(update, isA<TransactionUpdateMessage>(),
+          reason: 'Server should send TransactionUpdate');
+      expect(update.reducerCall.reducerName, equals('create_note'),
+          reason: 'Reducer name should match');
+    });
+
+    test('Procedure with wrong argument types', () async {
+      const requestId = 1005;
+
+      // A. PREPARE LISTENER
+      final resultFuture = subManager.onProcedureResult
+          .firstWhere((msg) => msg.requestId == requestId);
+
+      // B. ACTION - add_numbers expects (u32, u32), send strings instead
+      final encoder = BsatnEncoder();
+      encoder.writeString('not a number');
+      encoder.writeString('also not a number');
+
+      subManager.callProcedure(
+        'add_numbers',
+        encoder.toBytes(),
+        requestId: requestId,
+      );
+
+      // C. WAIT
+      final result = await resultFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(result.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(result.status.type, isA<ProcedureStatusType>(),
+          reason: 'Should receive some procedure status');
+    });
+
+    test('Procedure panic (divide by zero) returns internalError', () async {
+      const requestId = 1006;
+
+      // A. PREPARE LISTENER
+      final resultFuture = subManager.onProcedureResult
+          .firstWhere((msg) => msg.requestId == requestId);
+
+      // B. ACTION
+      final encoder = BsatnEncoder();
+      encoder.writeU32(100);
+
+      subManager.callProcedure(
+        'divide_by_zero',
+        encoder.toBytes(),
+        requestId: requestId,
+      );
+
+      // C. WAIT
+      final result = await resultFuture.timeout(Duration(seconds: 2));
+
+      // D. ASSERT
+      expect(result.requestId, equals(requestId),
+          reason: 'Request ID should match');
+      expect(result.status.type, equals(ProcedureStatusType.internalError),
+          reason: 'Divide by zero should return internalError');
+      expect(result.status.errorMessage, isNotNull,
+          reason: 'Error message should be present');
+
+      final errorMsg = result.status.errorMessage!.toLowerCase();
+      expect(
+        errorMsg.contains('divide') || errorMsg.contains('panic'),
+        isTrue,
+        reason: 'Error message should indicate division/panic error',
+      );
+    });
+  });
 }

@@ -21,6 +21,9 @@ class ClientGenerator {
     buf.writeln();
     buf.writeln("import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';");
     buf.writeln("import 'reducers.dart';");
+    if (schema.reducers.isNotEmpty) {
+      buf.writeln("import 'reducer_args.dart';");
+    }
 
     // Import all table files
     for (final table in schema.tables) {
@@ -35,6 +38,9 @@ class ClientGenerator {
     buf.writeln('  final SpacetimeDbConnection connection;');
     buf.writeln('  final SubscriptionManager subscriptions;');
     buf.writeln('  late final Reducers reducers;');
+    buf.writeln();
+    buf.writeln('  /// Access to ReducerEmitter for event-driven patterns');
+    buf.writeln('  ReducerEmitter get reducerEmitter => subscriptions.reducerEmitter;');
     buf.writeln();
 
     // Table cache getters
@@ -92,7 +98,8 @@ class ClientGenerator {
     buf.writeln('    required this.connection,');
     buf.writeln('    required this.subscriptions,');
     buf.writeln('  }) {');
-    buf.writeln('    reducers = Reducers(connection);');
+    buf.writeln('    // Initialize Reducers with connection and ReducerEmitter');
+    buf.writeln('    reducers = Reducers(connection, subscriptions.reducerEmitter);');
     buf.writeln('  }');
     buf.writeln();
 
@@ -130,6 +137,16 @@ class ClientGenerator {
       }
     }
     buf.writeln();
+
+    // Auto-register reducer arg decoders (Phase 5: Transaction Support)
+    if (schema.reducers.isNotEmpty) {
+      buf.writeln('    // Auto-register reducer argument decoders');
+      for (final reducer in schema.reducers) {
+        final reducerClassName = _toPascalCase(reducer.name);
+        buf.writeln("    subscriptionManager.reducerRegistry.registerDecoder('${reducer.name}', ${reducerClassName}ArgsDecoder());");
+      }
+      buf.writeln();
+    }
 
     buf.writeln('    final client = $clientName._(');
     buf.writeln('      connection: connection,');

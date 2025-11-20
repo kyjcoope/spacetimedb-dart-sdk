@@ -35,6 +35,19 @@ class BsatnDecoder {
   int get offset => _offset;
   int get remaining => _bytes.length - _offset;
 
+  /// Debug helper: Dump next N bytes as hex
+  String hexDump(int length) {
+    final end = (_offset + length).clamp(0, _bytes.length);
+    final bytes = _bytes.sublist(_offset, end);
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
+    return 'offset=$_offset: $hex';
+  }
+
+  /// Debug helper: Dump all remaining bytes as hex
+  String hexDumpAll() {
+    return hexDump(remaining);
+  }
+
   void _checkRemaining(int needed) {
     if (_offset + needed > _bytes.length) {
       throw StateError(
@@ -238,19 +251,6 @@ class BsatnDecoder {
     }
 
     return map;
-  }
-
-  /// Get hex dump of bytes from current offset for debugging
-  String hexDump(int length) {
-    final end = (_offset + length).clamp(0, _bytes.length);
-    final bytes = _bytes.sublist(_offset, end);
-    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ');
-    return 'offset=$_offset: $hex';
-  }
-
-  /// Get full hex dump of all remaining bytes
-  String hexDumpAll() {
-    return hexDump(remaining);
   }
 
 }

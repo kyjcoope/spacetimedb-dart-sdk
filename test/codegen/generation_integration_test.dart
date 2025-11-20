@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/dart_generator.dart';
+import 'test_helpers.dart';
 
 void main() {
   group('Code Generation Integration', () {
@@ -152,6 +153,8 @@ void main() {
         final generator = DartGenerator(schema);
         await generator.writeToDirectory(libDir.path);
 
+        final sdkPath = findSdkRoot();
+
         // Create pubspec.yaml with SDK dependency
         final pubspecContent = '''
 name: codegen_analyze_test
@@ -164,7 +167,7 @@ environment:
 
 dependencies:
   spacetimedb_dart_sdk:
-    path: ${Directory.current.path}
+    path: $sdkPath
 ''';
         await File('${testPkgDir.path}/pubspec.yaml').writeAsString(pubspecContent);
 
@@ -209,12 +212,13 @@ dependencies:
       final generator = DartGenerator(schema);
       final files = generator.generateAll();
 
-      // Should have one file per table + reducers + client
-      expect(files.length, equals(schema.tables.length + 2));
+      // Should have one file per table + reducers + reducer_args + client
+      expect(files.length, equals(schema.tables.length + 3));
 
       // Verify filenames
       final filenames = files.map((f) => f.filename).toList();
       expect(filenames, contains('reducers.dart'));
+      expect(filenames, contains('reducer_args.dart'));
       expect(filenames, contains('client.dart'));
 
       for (final table in schema.tables) {

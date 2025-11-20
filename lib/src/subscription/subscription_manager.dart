@@ -9,6 +9,10 @@ import '../messages/message_decoder.dart';
 import '../messages/server_messages.dart';
 import '../messages/client_messages.dart';
 import '../reducers/reducer_caller.dart';
+import '../reducers/reducer_registry.dart';
+import '../reducers/reducer_emitter.dart';
+import '../events/event.dart';
+import '../events/event_context.dart';
 
 /// Manages table subscriptions and processes real-time updates from SpacetimeDB
 ///
@@ -54,6 +58,8 @@ class SubscriptionManager {
   final SpacetimeDbConnection _connection;
   final ClientCache cache = ClientCache();
   late final ReducerCaller reducers;
+  final ReducerRegistry reducerRegistry = ReducerRegistry();
+  final ReducerEmitter reducerEmitter = ReducerEmitter();
   final Logger _logger = Logger();
 
   final _initialSubscriptionController =
@@ -162,7 +168,14 @@ class SubscriptionManager {
       cache.activateTable(tableUpdate.tableId, tableUpdate.tableName);
     }
 
-    // Phase 2: Process the data
+    // Phase 2: Create EventContext with SubscribeAppliedEvent
+    final event = SubscribeAppliedEvent();
+    final context = EventContext(
+      client: null, // Will be set properly by generated client code
+      event: event,
+    );
+
+    // Phase 3: Process the data with context
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) {
         // Table not registered - ignore silently (decoder wasn't registered)
@@ -175,12 +188,57 @@ class SubscriptionManager {
       for (final update in tableUpdate.updates) {
         final rows = update.update.inserts.getRows();
         _logger.d('    Inserting ${rows.length} rows');
-        table.applyInitialData(update.update.inserts);
+        table.applyInitialData(update.update.inserts, context);
       }
     }
   }
 
   void _handleTransactionUpdate(TransactionUpdateMessage message) {
+    // 1. Create Event from transaction message
+    Event event;
+
+    // Attempt to deserialize reducer arguments
+    final reducerArgs = reducerRegistry.deserializeArgs(
+      message.reducerCall.reducerName,
+      message.reducerCall.args,
+    );
+
+    if (reducerArgs != null) {
+      // Successfully deserialized - create ReducerEvent
+      event = ReducerEvent(
+        timestamp: message.timestamp,
+        status: message.status,
+        callerIdentity: message.callerIdentity,
+        callerConnectionId: message.callerConnectionId,
+        energyConsumed: message.energyQuantaUsed,
+        reducerName: message.reducerCall.reducerName,
+        reducerArgs: reducerArgs,
+      );
+
+      _logger.d('Transaction caused by reducer: ${message.reducerCall.reducerName}');
+      _logger.d('Arguments: $reducerArgs');
+      _logger.d('Status: ${message.status}');
+    } else {
+      // Deserialization failed - unknown reducer or corrupt data
+      event = UnknownTransactionEvent();
+      _logger.w('Failed to deserialize reducer args for: ${message.reducerCall.reducerName}');
+    }
+
+    // 2. Create EventContext
+    // Note: Client reference will be wired up properly in Phase 5 (code generation)
+    // For now, we use a placeholder that will be replaced by generated code
+    final context = EventContext(
+      client: null, // Will be set properly by generated client code
+      event: event,
+    );
+
+    // 3. Emit reducer completion event (Phase 4)
+    if (event is ReducerEvent) {
+      reducerEmitter.emit(event.reducerName, context);
+      _logger.d('Emitted reducer completion event for: ${event.reducerName}');
+    }
+
+    // 4. Apply table updates with context
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) continue;
 
@@ -189,12 +247,20 @@ class SubscriptionManager {
         table.applyTransactionUpdate(
           update.update.deletes,
           update.update.inserts,
+          context, // Pass context to table cache
         );
       }
     }
   }
 
   void _handleTransactionUpdateLight(TransactionUpdateLightMessage message) {
+    // Light messages don't include reducer info, so create UnknownTransactionEvent
+    final event = UnknownTransactionEvent();
+    final context = EventContext(
+      client: null, // Will be set properly by generated client code
+      event: event,
+    );
+
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) continue;
 
@@ -203,6 +269,7 @@ class SubscriptionManager {
         table.applyTransactionUpdate(
           update.update.deletes,
           update.update.inserts,
+          context,
         );
       }
     }
@@ -376,5 +443,6 @@ class SubscriptionManager {
     _subscribeMultiAppliedController.close();
     _unsubscribeMultiAppliedController.close();
     _procedureResultController.close();
+    reducerEmitter.dispose(); // Clean up reducer event listeners
   }
 }

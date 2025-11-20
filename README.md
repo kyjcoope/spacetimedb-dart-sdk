@@ -10,9 +10,11 @@ A complete Dart SDK for building real-time multiplayer applications with Spaceti
 - **Registry Pattern Cache** - Name-based decoder registration with runtime activation
 - **Subscription Management** - Real-time SQL query subscriptions with timeout safety
 - **Reducer Calling** - Type-safe server-side function calls
-- **All Server Messages** - Complete protocol implementation
+- **All Server Messages** - Complete protocol implementation (including transactions)
+- **Transaction Support** - Full transaction event handling with context
+- **Event Streams** - Zero-overhead broadcast streams for table changes with transaction context
 - **Type-Safe Casts** - No unsafe `as` casts, all type checks with promotion
-- **Comprehensive Tests** - All code passes `dart analyze`
+- **Comprehensive Tests** - 170+ tests, all passing with full E2E coverage
 
 ### Code Generation ✅
 - **Schema Extraction** - Extract from network, WASM, or project builds
@@ -106,18 +108,78 @@ client.yourTable.deleteStream.listen((item) {
 await client.disconnect();
 ```
 
+### Transaction Support
+
+The SDK provides full transaction support with event context:
+
+```dart
+// Listen to all transactions
+client.onTransactionUpdate.listen((update) {
+  print('Transaction status: ${update.status}');
+  if (update.reducerInfo != null) {
+    print('Caused by: ${update.reducerInfo!.reducerName}');
+  }
+});
+
+// Table event streams include transaction context
+client.yourTable.insertEventStream.listen((event) {
+  final ctx = event.context;
+
+  // Check if this was caused by a reducer
+  if (ctx.event is ReducerEvent) {
+    final reducerEvent = ctx.event as ReducerEvent;
+    print('Insert from reducer: ${reducerEvent.reducerName}');
+  }
+
+  // Access the inserted row
+  print('New row: ${event.row.name}');
+});
+
+// Filter to only reducer-caused events
+client.yourTable.eventsFromReducers.listen((event) {
+  // Only events caused by reducer calls, not subscriptions
+});
+
+// Filter to only this client's transactions
+client.yourTable.myInserts.listen((event) {
+  // Only inserts from this client's reducer calls
+});
+```
+
 ## Testing
+
+The SDK includes comprehensive testing with 170+ tests covering all functionality:
+
+- **Unit Tests** - Core SDK components (BSATN, cache, messages)
+- **Integration Tests** - Live SpacetimeDB server interactions
+- **Codegen Tests** - Code generation and validation
+- **E2E Tests** - Full CRUD cycle with generated code in subprocess
 
 See [TESTING.md](TESTING.md) for detailed testing instructions.
 
 Quick start:
 ```bash
-# Setup test environment
-./tool/setup_test_db.sh
+# Start SpacetimeDB
+spacetime start
+
+# Publish test module
+cd spacetime_test_module
+spacetime publish notesdb --server http://localhost:3000
 
 # Run all tests
 dart test
 ```
+
+### E2E Test
+
+The E2E test (`test/integration/codegen_e2e_test.dart`) is the "final boss" that validates:
+- ✅ Schema extraction from live server
+- ✅ Code generation produces valid, compilable Dart code
+- ✅ Generated client connects and auto-registers decoders
+- ✅ Full CRUD cycle (Create, Read, Update, Delete) works
+- ✅ Primary key detection and update coalescing
+- ✅ All table streams (insert, update, delete) fire correctly
+- ✅ Generated code runs in isolated subprocess (production-ready)
 
 ## Architecture Highlights
 
@@ -156,15 +218,18 @@ cache.activateTable(tableId: 257, tableName: 'note');
 - [x] Subscription management
 - [x] Reducer calling
 - [x] All server message types
+- [x] **Transaction Support** - Full transaction event handling with context
+- [x] **Event Streams** - Zero-overhead broadcast streams for table changes
 - [x] Code generation from schema (CLI tool)
 - [x] View support (Vec, Option, single-row)
 - [x] Registry pattern architecture
-- [x] Type-safe casts throughout
+- [x] Type-safe casts throughout (zero unsafe `as` casts)
 - [x] Timeout safety for subscriptions
-- [x] Event Streams - Zero-overhead broadcast streams for table changes
+- [x] **E2E Testing** - Full CRUD validation in subprocess
+- [x] **Primary Key Generation** - Auto-detect and generate getPrimaryKey()
+- [x] **Update Coalescing** - Delete+Insert pairs become Update events
 
 ### Potential Future Work
-- [ ] **Transaction Support** - Handle SpacetimeDB transactions
 - [ ] **Identity Management** - Client identity and authentication helpers
 - [ ] **Error Handling** - Structured error types from reducers
 - [ ] **Advanced Queries** - Query builder API

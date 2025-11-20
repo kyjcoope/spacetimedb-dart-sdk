@@ -23,6 +23,11 @@ class DartGenerator {
       final generator = ReducerGenerator(schema.reducers);
       files.add(GeneratedFile(
           filename: 'reducers.dart', content: generator.generate()));
+
+      // Generate reducer argument classes and decoders
+      files.add(GeneratedFile(
+          filename: 'reducer_args.dart',
+          content: generator.generateArgDecoders()));
     }
 
     final clientGenerator = ClientGenerator(schema);

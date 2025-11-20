@@ -8,6 +8,14 @@ class BsatnRowList {
 
   BsatnRowList({required this.sizeHint, required this.rowsData});
 
+  /// Create an empty BsatnRowList with no rows
+  static BsatnRowList empty() {
+    return BsatnRowList(
+      sizeHint: RowSizeHint.fixedSize(0),
+      rowsData: Uint8List(0),
+    );
+  }
+
   static BsatnRowList decode(BsatnDecoder decoder) {
     // Read RowSizeHint (enum)
     final hintTag = decoder.readU8();

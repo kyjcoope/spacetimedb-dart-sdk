@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import '../codec/bsatn_decoder.dart';
 import 'shared_types.dart';
+import 'reducer_info.dart';
+import 'update_status.dart';
 
 /// Server message type tags (Server -> Client)
 /// Based on websocket.rs ServerMessage enum order
@@ -65,36 +67,87 @@ class TransactionUpdateMessage implements ServerMessage {
   final int timestamp;
   final List<TableUpdate> tableUpdates;
 
+  // Transaction metadata fields (from Rust TransactionUpdate struct)
+  final UpdateStatus status;
+  final Uint8List callerIdentity;          // Identity: 32 bytes, NOT Option
+  final Uint8List callerConnectionId;      // ConnectionId: u128 (16 bytes), NOT Option
+  final ReducerInfo reducerCall;           // ReducerCallInfo struct
+  final int energyQuantaUsed;              // EnergyQuanta: u128 - stored as int (will lose precision for huge values)
+  final int totalHostExecutionDuration;    // TimeDuration: i64 microseconds
+
   TransactionUpdateMessage({
     required this.transactionOffset,
     required this.timestamp,
     required this.tableUpdates,
+    required this.status,
+    required this.callerIdentity,
+    required this.callerConnectionId,
+    required this.reducerCall,
+    required this.energyQuantaUsed,
+    required this.totalHostExecutionDuration,
   });
 
   @override
   ServerMessageType get messageType => ServerMessageType.transactionUpdate;
 
   static TransactionUpdateMessage decode(BsatnDecoder decoder) {
+    // 1. Read UpdateStatus (algebraic enum with table updates inside Committed variant)
     final statusTag = decoder.readU8();
 
+    UpdateStatus status;
     final List<TableUpdate> tableUpdates;
+
     if (statusTag == 0) {
+      // Committed
+      status = Committed();
       tableUpdates = decoder.readList(() => TableUpdate.decode(decoder));
     } else if (statusTag == 1) {
-      decoder.readString();
+      // Failed
+      final errorMessage = decoder.readString();
+      status = Failed(errorMessage);
       tableUpdates = [];
     } else if (statusTag == 2) {
+      // OutOfEnergy
+      final budgetInfo = decoder.readString();
+      status = OutOfEnergy(budgetInfo);
       tableUpdates = [];
     } else {
       throw ArgumentError('Unknown UpdateStatus tag: $statusTag');
     }
 
+    // 2. Read timestamp (i64, serializes as u64)
     final timestamp = decoder.readU64();
 
+    // 3. Read caller_identity (Identity: 32 bytes, NOT Option)
+    final callerIdentity = decoder.readBytes(32);
+
+    // 4. Read caller_connection_id (ConnectionId: u128 = 16 bytes, NOT Option)
+    final callerConnectionId = decoder.readBytes(16);
+
+    // 5. Read reducer_call (ReducerCallInfo struct)
+    final reducerCall = ReducerInfo.decode(decoder);
+
+    // 6. Read energy_quanta_used (EnergyQuanta: u128 = 16 bytes)
+    final energyBytes = decoder.readBytes(16);
+    // Convert to int (will lose precision for very large values, but acceptable)
+    final energyQuantaUsed = energyBytes[0] |
+        (energyBytes[1] << 8) |
+        (energyBytes[2] << 16) |
+        (energyBytes[3] << 24);
+
+    // 7. Read total_host_execution_duration (TimeDuration: i64 microseconds)
+    final totalHostExecutionDuration = decoder.readU64(); // i64 serializes as u64
+
     return TransactionUpdateMessage(
-      transactionOffset: 0,
+      transactionOffset: 0,  // Not in wire protocol
       timestamp: timestamp,
       tableUpdates: tableUpdates,
+      status: status,
+      callerIdentity: callerIdentity,
+      callerConnectionId: callerConnectionId,
+      reducerCall: reducerCall,
+      energyQuantaUsed: energyQuantaUsed,
+      totalHostExecutionDuration: totalHostExecutionDuration,
     );
   }
 }

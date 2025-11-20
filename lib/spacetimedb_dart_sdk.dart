@@ -11,7 +11,7 @@ export 'src/codec/bsatn_decoder.dart';
 
 // Client cache
 export 'src/cache/client_cache.dart';
-export 'src/cache/table_cache.dart';
+export 'src/cache/table_cache.dart' hide TableUpdate;
 export 'src/cache/row_decoder.dart';
 
 // Messages
@@ -19,3 +19,16 @@ export 'src/messages/server_messages.dart';
 export 'src/messages/client_messages.dart';
 export 'src/messages/shared_types.dart';
 export 'src/messages/message_decoder.dart';
+export 'src/messages/reducer_info.dart';
+export 'src/messages/update_status.dart';
+
+// Reducers
+export 'src/reducers/reducer_caller.dart';
+export 'src/reducers/reducer_arg_decoder.dart';
+export 'src/reducers/reducer_registry.dart';
+export 'src/reducers/reducer_emitter.dart';
+
+// Events
+export 'src/events/event.dart';
+export 'src/events/event_context.dart';
+export 'src/events/table_event.dart';

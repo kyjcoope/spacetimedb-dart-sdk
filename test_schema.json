@@ -1,0 +1,178 @@
+
+{
+  "typespace": {
+    "types": [
+      {
+        "Product": {
+          "elements": [
+            {
+              "name": {
+                "some": "id"
+              },
+              "algebraic_type": {
+                "U32": []
+              }
+            },
+            {
+              "name": {
+                "some": "title"
+              },
+              "algebraic_type": {
+                "String": []
+              }
+            },
+            {
+              "name": {
+                "some": "content"
+              },
+              "algebraic_type": {
+                "String": []
+              }
+            },
+            {
+              "name": {
+                "some": "timestamp"
+              },
+              "algebraic_type": {
+                "U64": []
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "tables": [
+    {
+      "name": "note",
+      "product_type_ref": 0,
+      "primary_key": [
+        0
+      ],
+      "indexes": [
+        {
+          "name": {
+            "some": "note_id_idx_btree"
+          },
+          "accessor_name": {
+            "some": "id"
+          },
+          "algorithm": {
+            "BTree": [
+              0
+            ]
+          }
+        }
+      ],
+      "constraints": [
+        {
+          "name": {
+            "some": "note_id_key"
+          },
+          "data": {
+            "Unique": {
+              "columns": [
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "sequences": [],
+      "schedule": {
+        "none": []
+      },
+      "table_type": {
+        "User": []
+      },
+      "table_access": {
+        "Public": []
+      }
+    }
+  ],
+  "reducers": [
+    {
+      "name": "create_note",
+      "params": {
+        "elements": [
+          {
+            "name": {
+              "some": "title"
+            },
+            "algebraic_type": {
+              "String": []
+            }
+          },
+          {
+            "name": {
+              "some": "content"
+            },
+            "algebraic_type": {
+              "String": []
+            }
+          }
+        ]
+      },
+      "lifecycle": {
+        "none": []
+      }
+    },
+    {
+      "name": "init",
+      "params": {
+        "elements": []
+      },
+      "lifecycle": {
+        "some": {
+          "Init": []
+        }
+      }
+    },
+    {
+      "name": "update_note",
+      "params": {
+        "elements": [
+          {
+            "name": {
+              "some": "note_id"
+            },
+            "algebraic_type": {
+              "U32": []
+            }
+          },
+          {
+            "name": {
+              "some": "title"
+            },
+            "algebraic_type": {
+              "String": []
+            }
+          },
+          {
+            "name": {
+              "some": "content"
+            },
+            "algebraic_type": {
+              "String": []
+            }
+          }
+        ]
+      },
+      "lifecycle": {
+        "none": []
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": {
+        "scope": [],
+        "name": "Note"
+      },
+      "ty": 0,
+      "custom_ordering": true
+    }
+  ],
+  "misc_exports": [],
+  "row_level_security": []
+}

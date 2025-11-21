@@ -36,7 +36,11 @@ dependencies:
 ### 3. Generate client code
 
 ```bash
-dart run spacetimedb_dart_sdk:generate -d your_database -o lib/generated
+# From running server
+dart run spacetimedb_dart_sdk:generate -s http://localhost:3000 -d your_database -o lib/generated
+
+# Or from local Rust project
+dart run spacetimedb_dart_sdk:generate -p path/to/module -o lib/generated
 ```
 
 ### 4. Use it
@@ -47,19 +51,21 @@ import 'package:your_app/generated/client.dart';
 final client = await SpacetimeDbClient.connect(
   host: 'localhost:3000',
   database: 'your_database',
-  initialSubscriptions: ['SELECT * FROM your_table'],
+  ssl: false,
+  authStorage: InMemoryTokenStore(), // or your persistent store
+  initialSubscriptions: ['SELECT * FROM users'],
 );
 
 // Call reducers
-await client.reducers.createItem(name: 'Test', value: 42);
+await client.reducers.createUser(name: 'Alice', email: 'alice@example.com');
 
 // Read data
-for (final item in client.yourTable.iter()) {
-  print(item.name);
+for (final user in client.users.iter()) {
+  print(user.name);
 }
 
 // Listen to changes
-client.yourTable.insertStream.listen((item) => print('New: ${item.name}'));
+client.users.insertStream.listen((user) => print('New: ${user.name}'));
 
 await client.disconnect();
 ```
@@ -130,16 +136,12 @@ client.connection.connectionStatus.listen((status) {
     case ConnectionStatus.fatalError: showRetry();
   }
 });
-
-// Connection presets
-config: ConnectionConfig.mobile  // Aggressive reconnect
-config: ConnectionConfig.stable  // Less aggressive
 ```
 
 ## Transaction Events
 
 ```dart
-client.yourTable.insertEventStream.listen((event) {
+client.users.insertEventStream.listen((event) {
   if (event.context.event is ReducerEvent) {
     print('From reducer: ${event.context.event.reducerName}');
   }
@@ -147,7 +149,7 @@ client.yourTable.insertEventStream.listen((event) {
 });
 
 // Filter to only this client's transactions
-client.yourTable.myInserts.listen((event) { ... });
+client.users.myInserts.listen((event) { ... });
 ```
 
 ## Testing

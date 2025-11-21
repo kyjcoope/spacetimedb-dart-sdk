@@ -36,3 +36,7 @@ system_protocol.md
 
 # Rust build artifacts
 spacetime_test_module/target/
+
+# Generated code (users generate their own)
+lib/generated/
+test/generated/

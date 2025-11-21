@@ -22,7 +22,7 @@ void main() {
       }
     });
 
-    test('Generated code functionality (Full CRUD cycle)', () async {
+    test('Generated code functionality (Full CRUD cycle + Sum Types)', () async {
       print('Phase 1: Fetching Schema & Generating Code...');
 
       // 1. Get Real Schema
@@ -41,8 +41,9 @@ void main() {
 import 'dart:io';
 import 'dart:async';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
-import 'client.dart'; // Generated
-import 'note.dart';   // Generated
+import 'client.dart';      // Generated
+import 'note.dart';        // Generated
+import 'note_status.dart'; // Generated (Sum Type)
 
 void main() async {
   try {
@@ -79,6 +80,33 @@ void main() async {
 
     if (createdNote.content != 'Original Content') throw 'Content mismatch';
 
+    // =================================================================
+    // 1.5. SUM TYPES (Tests Enum Generation & Pattern Matching)
+    // =================================================================
+    print('   🔍 Testing SUM TYPES (Generated Enums)...');
+
+    // Verify the status field is strongly typed (not dynamic)
+    final status = createdNote.status;
+    if (status is! NoteStatus) {
+      throw 'Status should be NoteStatus type, got \${status.runtimeType}';
+    }
+
+    // Test pattern matching exhaustiveness (compile-time safety)
+    final statusDescription = switch (status) {
+      NoteStatusDraft() => 'draft',
+      NoteStatusPublished(:final value) => 'published_\$value',
+      NoteStatusArchived() => 'archived',
+    };
+
+    // Verify we can construct and compare enum variants
+    const testDraft = NoteStatusDraft();
+    if (testDraft is! NoteStatusDraft) throw 'Enum construction failed';
+
+    final testPublished = NoteStatusPublished(1234567890);
+    if (testPublished is! NoteStatusPublished) throw 'Enum with payload failed';
+    if (testPublished.value != 1234567890) throw 'Enum payload mismatch';
+
+    print('   ✅ SUM TYPES Success. Status: \$statusDescription');
 
     // =================================================================
     // 2. UPDATE (Tests Primary Key Generation & Coalescing)
@@ -126,7 +154,7 @@ void main() async {
         throw 'Cache mismatch: Note should be deleted but was found in find()';
     }
 
-    print('   🎉 E2E COMPLETE: Full CRUD Cycle Verified.');
+    print('   🎉 E2E COMPLETE: Full CRUD Cycle + Sum Types Verified.');
     exit(0);
 
   } catch (e, stack) {

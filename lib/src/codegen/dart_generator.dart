@@ -2,6 +2,7 @@ import 'package:spacetimedb_dart_sdk/src/codegen/client_generator.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/reducer_generator.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/models.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/table_generator.dart';
+import 'package:spacetimedb_dart_sdk/src/codegen/generators/sum_type_generator.dart';
 import 'dart:io';
 
 class DartGenerator {
@@ -10,6 +11,26 @@ class DartGenerator {
 
   List<GeneratedFile> generateAll() {
     final files = <GeneratedFile>[];
+
+    // Generate sum type enums
+    for (final typeDef in schema.types) {
+      final type = schema.typeSpace.types[typeDef.typeRef];
+
+      if (type.isSum) {
+        final generator = SumTypeGenerator(
+          enumName: typeDef.name,
+          sumType: type.sum!,
+          typeSpace: schema.typeSpace,
+          typeDefs: schema.types,
+        );
+
+        final fileName = _toSnakeCase(typeDef.name);
+        files.add(GeneratedFile(
+          filename: '$fileName.dart',
+          content: generator.generate(),
+        ));
+      }
+    }
 
     for (final table in schema.tables) {
       final generator = TableGenerator(schema, table);
@@ -35,6 +56,13 @@ class DartGenerator {
         filename: 'client.dart', content: clientGenerator.generate()));
 
     return files;
+  }
+
+  String _toSnakeCase(String input) {
+    return input
+        .replaceAllMapped(
+            RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}')
+        .replaceFirst(RegExp(r'^_'), '');
   }
 
   Future<void> writeToDirectory(String outputPath) async {

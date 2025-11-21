@@ -1,12 +1,25 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:math' show Random;
 import 'dart:typed_data';
 
 import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_state.dart';
+import 'package:spacetimedb_dart_sdk/src/connection/connection_status.dart';
+import 'package:spacetimedb_dart_sdk/src/connection/connection_quality.dart';
+import 'package:spacetimedb_dart_sdk/src/connection/connection_config.dart';
+import 'package:spacetimedb_dart_sdk/src/connection/keep_alive_monitor.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/client_messages.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+/// Factory function for creating WebSocket channels
+/// Allows dependency injection for testing
+typedef WebSocketFactory = WebSocketChannel Function(
+  Uri uri,
+  Iterable<String>? protocols,
+  Map<String, dynamic>? headers,
+);
 
 /// WebSocket connection to a SpacetimeDB database
 ///
@@ -42,17 +55,35 @@ class SpacetimeDbConnection {
   final String host;
   final String database;
   final String? authToken;
+  final ConnectionConfig config;
+  final WebSocketFactory _socketFactory;
 
   final Logger _logger = Logger();
+  static final _rng = Random.secure();
 
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 5;
   Timer? _reconnectTimer;
   bool _shouldReconnect = false;
   int _nextRequestId = 1;
 
+  // Keep-alive monitoring
+  KeepAliveMonitor? _keepAlive;
+  DateTime? _lastMessageReceived;
+  DateTime? _lastPingSent;
+
   WebSocketChannel? _channel;
   ConnectionState _state = ConnectionState.disconnected;
+
+  // Public connection status (for UI binding)
+  ConnectionStatus _currentStatus = ConnectionStatus.disconnected;
+  final StreamController<ConnectionStatus> _statusController =
+      StreamController<ConnectionStatus>.broadcast();
+
+  // Connection quality tracking
+  final StreamController<ConnectionQuality> _qualityController =
+      StreamController<ConnectionQuality>.broadcast();
+  String? _lastError;
+  DateTime? _lastSuccessfulConnection;
 
   final StreamController<ConnectionState> _stateController =
       StreamController<ConnectionState>.broadcast();
@@ -60,6 +91,15 @@ class SpacetimeDbConnection {
       StreamController<Uint8List>.broadcast();
   final StreamController<String> _errorController =
       StreamController<String>.broadcast();
+
+  /// Stream of connection status changes for UI binding
+  Stream<ConnectionStatus> get connectionStatus => _statusController.stream;
+
+  /// Stream of connection quality metrics
+  Stream<ConnectionQuality> get connectionQuality => _qualityController.stream;
+
+  /// Current connection status
+  ConnectionStatus get status => _currentStatus;
 
   Stream<ConnectionState> get onStateChanged => _stateController.stream;
 
@@ -71,7 +111,17 @@ class SpacetimeDbConnection {
     required this.host,
     required this.database,
     this.authToken,
-  });
+    this.config = const ConnectionConfig(),
+    WebSocketFactory? socketFactory,
+  }) : _socketFactory = socketFactory ??
+            ((uri, protocols, headers) => IOWebSocketChannel.connect(
+                  uri,
+                  protocols: protocols,
+                  headers: headers,
+                  connectTimeout: const Duration(seconds: 10),
+                )) {
+    _shouldReconnect = config.autoReconnect;
+  }
 
   ConnectionState get state => _state;
 
@@ -84,6 +134,7 @@ class SpacetimeDbConnection {
     }
     _shouldReconnect = true;
     _updateState(ConnectionState.connecting);
+    _updateStatus(ConnectionStatus.connecting);
 
     try {
       final uri = Uri.parse('ws://$host/v1/database/$database/subscribe');
@@ -93,17 +144,24 @@ class SpacetimeDbConnection {
         headers['Authorization'] = 'Bearer $authToken';
       }
 
-      _channel = IOWebSocketChannel.connect(
+      _channel = _socketFactory(
         uri,
-        protocols: ['v1.bsatn.spacetimedb'],
-        headers: headers,
-        connectTimeout: const Duration(seconds: 10),
+        ['v1.bsatn.spacetimedb'],
+        headers,
       );
       await _channel!.ready;
       _setupMessageListener();
+      _setupKeepAlive();
       _updateState(ConnectionState.connected);
+      _updateStatus(ConnectionStatus.connected);
+      _reconnectAttempts = 0; // Reset on successful connection
     } catch (e) {
+      _logger.e('Connection failed: $e');
+
+      // FIX: Update BOTH State and Status to prevent desynchronization
       _updateState(ConnectionState.disconnected);
+      _updateStatus(ConnectionStatus.disconnected);
+
       _channel = null;
       rethrow;
     }
@@ -123,6 +181,7 @@ class SpacetimeDbConnection {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _keepAlive?.stop(); // Stop keep-alive monitoring
     _updateState(ConnectionState.disconnected);
     await _channel?.sink.close();
     _channel = null;
@@ -133,6 +192,35 @@ class SpacetimeDbConnection {
       _state = newState;
       _stateController.add(_state);
     }
+  }
+
+  void _updateStatus(ConnectionStatus newStatus) {
+    if (_currentStatus != newStatus) {
+      _currentStatus = newStatus;
+      _statusController.add(newStatus);
+      _logger.i('Connection status: $newStatus');
+
+      if (newStatus == ConnectionStatus.connected) {
+        _lastSuccessfulConnection = DateTime.now();
+      }
+
+      _updateQuality();
+    }
+  }
+
+  void _updateQuality() {
+    final quality = ConnectionQuality(
+      status: _currentStatus,
+      reconnectAttempts: _reconnectAttempts,
+      timeSinceLastConnection: _lastSuccessfulConnection != null
+          ? DateTime.now().difference(_lastSuccessfulConnection!)
+          : null,
+      lastError: _lastError,
+      lastPingSent: _lastPingSent,
+      lastPongReceived: _lastMessageReceived,
+    );
+
+    _qualityController.add(quality);
   }
 
   /// Sends binary data to the SpacetimeDB server
@@ -161,6 +249,10 @@ class SpacetimeDbConnection {
   void _setupMessageListener() {
     _channel!.stream.listen(
       (dynamic data) {
+        // Every single message pushes the next ping 30 seconds into the future
+        _keepAlive?.notifyMessageReceived();
+        _lastMessageReceived = DateTime.now();
+
         if (data is Uint8List) {
           // if (data.isNotEmpty) {
           //   _logger.d('Received message type ${data[0]}, length ${data.length} bytes');
@@ -177,12 +269,25 @@ class SpacetimeDbConnection {
       onError: (error) {
         final errorMsg = 'WebSocket error: $error';
         _logger.e(errorMsg);
+        _lastError = errorMsg;
         _errorController.add(errorMsg);
         _updateState(ConnectionState.disconnected);
+        _updateQuality();
       },
       onDone: () {
         _logger.i('WebSocket closed');
+        _keepAlive?.stop();
         _updateState(ConnectionState.disconnected);
+
+        // Determine if this is first disconnect or a reconnection scenario
+        if (_currentStatus == ConnectionStatus.connecting) {
+          // First connection failed
+          _updateStatus(ConnectionStatus.disconnected);
+        } else if (_currentStatus == ConnectionStatus.connected) {
+          // Was connected, now lost connection
+          _updateStatus(ConnectionStatus.reconnecting);
+        }
+
         _channel = null;
         _attemptReconnect();
       },
@@ -190,26 +295,34 @@ class SpacetimeDbConnection {
   }
 
   Duration _getReconnectDelay() {
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    final seconds = math.pow(2, _reconnectAttempts).toInt();
-    return Duration(seconds: seconds.clamp(1, 30));
+    // Exponential backoff based on config
+    final baseSeconds = config.baseReconnectDelay.inMilliseconds;
+    final delayMs = baseSeconds * math.pow(2, _reconnectAttempts);
+    final maxMs = config.maxReconnectDelay.inMilliseconds;
+    return Duration(milliseconds: delayMs.toInt().clamp(baseSeconds, maxMs));
   }
 
   Future<void> _attemptReconnect() async {
-    if (!_shouldReconnect || _reconnectAttempts >= _maxReconnectAttempts) {
+    if (!config.autoReconnect || !_shouldReconnect) return;
+
+    // Check for fatal error condition
+    if (_reconnectAttempts >= config.maxReconnectAttempts) {
+      _logger.e('Max reconnection attempts reached. Giving up.');
+      _updateStatus(ConnectionStatus.fatalError);
+      _shouldReconnect = false;
       return;
     }
 
     _reconnectAttempts++;
     final delay = _getReconnectDelay();
     _logger.i(
-        'Reconnecting in ${delay.inSeconds}s (attempt $_reconnectAttempts/$_maxReconnectAttempts)');
+        'Reconnecting in ${delay.inSeconds}s (attempt $_reconnectAttempts/${config.maxReconnectAttempts})');
 
     _updateState(ConnectionState.reconnecting);
+    _updateStatus(ConnectionStatus.reconnecting);
     _reconnectTimer = Timer(delay, () async {
       try {
         await connect();
-        _reconnectAttempts = 0; // Reset on success
       } catch (e) {
         await _attemptReconnect(); // Try again
       }
@@ -246,6 +359,30 @@ class SpacetimeDbConnection {
     await connect();
   }
 
+  /// Manually retry connection after fatal error
+  ///
+  /// Resets the reconnection counter and attempts to connect again.
+  /// Should only be called when status is [ConnectionStatus.fatalError] or
+  /// [ConnectionStatus.disconnected].
+  ///
+  /// Example:
+  /// ```dart
+  /// if (connection.status == ConnectionStatus.fatalError) {
+  ///   await connection.retryConnection();
+  /// }
+  /// ```
+  Future<void> retryConnection() async {
+    if (_currentStatus != ConnectionStatus.fatalError &&
+        _currentStatus != ConnectionStatus.disconnected) {
+      throw StateError('Cannot retry when status is $_currentStatus');
+    }
+
+    _logger.i('Manual retry initiated');
+    _reconnectAttempts = 0;
+    _shouldReconnect = true;
+    await connect();
+  }
+
   /// Calls a reducer with BSATN-encoded arguments
   ///
   /// Sends a reducer call to the SpacetimeDB server. The reducer will execute
@@ -268,5 +405,68 @@ class SpacetimeDbConnection {
     );
 
     send(message.encode());
+  }
+
+  // Keep-alive monitoring
+
+  void _setupKeepAlive() {
+    _keepAlive = KeepAliveMonitor(
+      onSendPing: () {
+        _logger.d('Connection idle - sending keep-alive ping');
+        try {
+          final messageId = Uint8List(16);
+          for (var i = 0; i < 16; i++) {
+            messageId[i] = _rng.nextInt(256);
+          }
+          const pingQuery = 'SELECT * FROM __spacetime_dart_sdk_keepalive__';
+
+          // 3. Send the keep-alive query
+          final message = OneOffQueryMessage(
+            messageId: messageId,
+            queryString: pingQuery,
+          );
+          send(message.encode());
+          _lastPingSent = DateTime.now();
+        } catch (e) {
+          _logger.e('Failed to send keep-alive ping: $e');
+        }
+      },
+      onDisconnect: () {
+        _logger.w('Keep-alive timeout - connection declared dead');
+        _handleStaleConnection();
+      },
+      idleThreshold: config.pingInterval,
+      pongTimeout: config.pongTimeout,
+    );
+  }
+
+  void _handleStaleConnection() {
+    // Close the connection
+    _channel?.sink.close();
+    _channel = null;
+
+    _updateState(ConnectionState.disconnected);
+    _updateStatus(ConnectionStatus.reconnecting);
+
+    _attemptReconnect();
+  }
+
+  /// Disposes of resources used by this connection
+  ///
+  /// Closes all stream controllers and disconnects from the server.
+  /// Should be called when the connection is no longer needed.
+  ///
+  /// Example:
+  /// ```dart
+  /// await connection.dispose();
+  /// ```
+  Future<void> dispose() async {
+    _keepAlive?.stop();
+    await disconnect();
+    await _statusController.close();
+    await _qualityController.close();
+    await _stateController.close();
+    await _messageController.close();
+    await _errorController.close();
   }
 }

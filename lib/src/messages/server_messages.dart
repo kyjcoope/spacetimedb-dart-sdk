@@ -226,20 +226,22 @@ class OneOffQueryResponse implements ServerMessage {
     final messageIdLength = decoder.readU32();
     final messageId = decoder.readBytes(messageIdLength);
 
-    final requestId = decoder.readU32();
+    // error is Option<String>
+    // DISCOVERED: SpacetimeDB uses INVERTED Option encoding: 0x00 = Some, 0x01 = None
+    // This is opposite of Rust's standard Option discriminant
+    final errorTag = decoder.readU8();
+    final error = (errorTag == 0) ? decoder.readString() : null;
 
-    final hasError = decoder.readU8() == 1;
-    final error = hasError ? decoder.readString() : null;
-
-    final table = OneOffTable.decode(decoder);
+    // tables is Vec<OneOffTable>
+    final tables = decoder.readList(() => OneOffTable.decode(decoder));
 
     final duration = decoder.readU64();
 
     return OneOffQueryResponse(
       messageId: messageId,
-      requestId: requestId,
+      requestId: 0, // Not in wire format, using placeholder
       error: error,
-      tables: [table],
+      tables: tables,
       totalHostExecutionDurationMicros: duration,
     );
   }

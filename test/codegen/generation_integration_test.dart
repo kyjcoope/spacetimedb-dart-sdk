@@ -212,8 +212,15 @@ dependencies:
       final generator = DartGenerator(schema);
       final files = generator.generateAll();
 
-      // Should have one file per table + reducers + reducer_args + client
-      expect(files.length, equals(schema.tables.length + 3));
+      // Count sum types (enums) in the schema
+      final sumTypeCount = schema.types
+          .where((typeDef) => schema.typeSpace.types[typeDef.typeRef].sum != null)
+          .length;
+
+      // Should have: tables + sum_types + reducers + reducer_args + client
+      final expectedFiles = schema.tables.length + sumTypeCount + 3;
+      expect(files.length, equals(expectedFiles),
+          reason: 'Expected ${schema.tables.length} tables + $sumTypeCount sum types + 3 system files');
 
       // Verify filenames
       final filenames = files.map((f) => f.filename).toList();

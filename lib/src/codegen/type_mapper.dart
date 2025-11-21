@@ -1,3 +1,5 @@
+import 'models/type_models.dart';
+
 class TypeMapper {
   // Type mappings
   static const _dartTypeMap = {
@@ -45,12 +47,50 @@ class TypeMapper {
     'String': 'readString',
   };
 
-  static String toDartType(Map<String, dynamic> algebraicType) {
+  /// Map algebraic type to Dart type string
+  /// Pass typeSpace and typeDefs to resolve Ref types
+  static String toDartType(
+    Map<String, dynamic> algebraicType, {
+    TypeSpace? typeSpace,
+    List<TypeDef>? typeDefs,
+  }) {
+    // 1. Handle Ref types (references to other types)
+    if (algebraicType.containsKey('Ref')) {
+      final typeIndex = algebraicType['Ref'] as int;
+
+      if (typeSpace != null && typeDefs != null) {
+        // Find the TypeDef that references this type
+        final typeDef = typeDefs.firstWhere(
+          (td) => td.typeRef == typeIndex,
+          orElse: () => TypeDef(scope: [], name: '', typeRef: -1, customOrdering: false),
+        );
+
+        if (typeDef.name.isNotEmpty) {
+          return _toPascalCase(typeDef.name);
+        }
+      }
+
+      return 'dynamic'; // Fallback if we can't resolve
+    }
+
+    // 2. Handle Array types (recursive)
+    if (algebraicType.containsKey('Array')) {
+      final elementType = algebraicType['Array'];
+      final dartInnerType = toDartType(
+        elementType,
+        typeSpace: typeSpace,
+        typeDefs: typeDefs,
+      );
+      return 'List<$dartInnerType>';
+    }
+
+    // 3. Handle primitive types
     for (final key in _dartTypeMap.keys) {
       if (algebraicType.containsKey(key)) {
         return _dartTypeMap[key]!;
       }
     }
+
     return 'dynamic';
   }
 
@@ -70,5 +110,38 @@ class TypeMapper {
       }
     }
     return 'read';
+  }
+
+  /// Check if a type is a Ref (reference to another type)
+  static bool isRefType(Map<String, dynamic> algebraicType) {
+    return algebraicType.containsKey('Ref');
+  }
+
+  /// Get the type name for a Ref type
+  static String? getRefTypeName(
+    Map<String, dynamic> algebraicType,
+    List<TypeDef> typeDefs,
+  ) {
+    if (!isRefType(algebraicType)) return null;
+
+    final typeIndex = algebraicType['Ref'] as int;
+    final typeDef = typeDefs.firstWhere(
+      (td) => td.typeRef == typeIndex,
+      orElse: () => TypeDef(scope: [], name: '', typeRef: -1, customOrdering: false),
+    );
+
+    return typeDef.name.isNotEmpty ? typeDef.name : null;
+  }
+
+  static String _toPascalCase(String input) {
+    if (input.isEmpty) return input;
+    return input[0].toUpperCase() + input.substring(1);
+  }
+
+  static String _toSnakeCase(String input) {
+    return input
+        .replaceAllMapped(
+            RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}')
+        .replaceFirst(RegExp(r'^_'), '');
   }
 }

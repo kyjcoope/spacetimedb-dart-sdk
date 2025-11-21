@@ -1,6 +1,14 @@
 use spacetimedb::{
-    procedure, reducer, table, view, AnonymousViewContext, ProcedureContext, ReducerContext, Table,
+    procedure, reducer, table, view, AnonymousViewContext, ProcedureContext, ReducerContext, Table, SpacetimeType,
 };
+
+/// Status enum for testing sum types
+#[derive(SpacetimeType, Debug, Clone, PartialEq, Eq)]
+pub enum NoteStatus {
+    Draft,
+    Published { published_at: u64 },
+    Archived,
+}
 
 /// Simple Note table for testing
 #[table(name = note, public)]
@@ -11,6 +19,7 @@ pub struct Note {
     pub content: String,
     #[index(btree)]
     pub timestamp: u64,
+    pub status: NoteStatus,
 }
 
 /// Reducer to create a new note
@@ -24,6 +33,7 @@ pub fn create_note(ctx: &ReducerContext, title: String, content: String) {
         title,
         content,
         timestamp,
+        status: NoteStatus::Draft,
     });
 }
 
@@ -89,6 +99,7 @@ pub fn init(ctx: &ReducerContext) {
         title: "First Note".to_string(),
         content: "This is my first note".to_string(),
         timestamp: 0,
+        status: NoteStatus::Draft,
     });
 
     ctx.db.note().insert(Note {
@@ -96,5 +107,6 @@ pub fn init(ctx: &ReducerContext) {
         title: "Second Note".to_string(),
         content: "This is my second note".to_string(),
         timestamp: 0,
+        status: NoteStatus::Published { published_at: 1234567890 },
     });
 }

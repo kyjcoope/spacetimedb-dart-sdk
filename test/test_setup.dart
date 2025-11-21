@@ -55,19 +55,36 @@ Future<void> setupTestEnvironment() async {
     throw Exception('Build failed: ${buildResult.stderr}');
   }
 
-  // Delete existing database
-  await Process.run('spacetime', ['delete', 'notesdb']);
+  // Delete existing database (ignore errors if it doesn't exist)
+  await Process.run('spacetime', ['delete', 'notesdb', '-y']);
 
   // Publish
   print('Publishing test module...');
   final publishResult = await Process.run(
     'spacetime',
-    ['publish', '--clear-database', 'notesdb'],
+    ['publish', 'notesdb'],
     workingDirectory: testModuleDir.path,
   );
   if (publishResult.exitCode != 0) {
     throw Exception('Publish failed: ${publishResult.stderr}');
   }
+
+  // Generate test code from notesdb schema
+  print('Generating test code from notesdb schema...');
+  final generateResult = await Process.run(
+    'dart',
+    [
+      'run',
+      'spacetimedb_dart_sdk:generate',
+      '-d', 'notesdb',
+      '-s', 'http://localhost:3000',
+      '-o', 'test/generated',
+    ],
+  );
+  if (generateResult.exitCode != 0) {
+    throw Exception('Code generation failed: ${generateResult.stderr}');
+  }
+  print('✅ Generated test code in test/generated/');
 
   // Mark setup as done
   await marker.writeAsString(DateTime.now().toIso8601String());

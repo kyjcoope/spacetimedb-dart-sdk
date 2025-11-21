@@ -60,6 +60,25 @@ Future<void> main() async {
     exit(1);
   }
 
+  // Generate test code from notesdb schema
+  print('🔧 Generating test code from notesdb schema...');
+  final generateResult = await Process.run(
+    'dart',
+    [
+      'run',
+      'spacetimedb_dart_sdk:generate',
+      '-d', 'notesdb',
+      '-s', 'http://localhost:3000',
+      '-o', 'test/generated',
+    ],
+  );
+
+  if (generateResult.exitCode != 0) {
+    print('❌ Code generation failed: ${generateResult.stderr}');
+    exit(1);
+  }
+  print('✅ Generated test code in test/generated/');
+
   print('\n✅ Test environment setup complete!\n');
   print('You can now run tests with:');
   print('  dart test\n');

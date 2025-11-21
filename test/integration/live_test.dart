@@ -3,16 +3,13 @@ import 'dart:math';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
 import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
 
-import 'note_decoder.dart';
+import '../generated/note.dart';
+import '../helpers/integration_test_helper.dart';
 
 /// Live integration test with local SpacetimeDB server
-///
-/// Before running:
-/// 1. spacetime start (in one terminal)
-/// 2. cd spacetime_test_module
-/// 3. spacetime publish testdb --server http://localhost:3000 --anonymous
-/// 4. dart run test/integration/live_test.dart
+
 void main() async {
+  await ensureTestEnvironment();
   print('🚀 Starting live SpacetimeDB integration test...\n');
 
   // 1. Create connection to local server

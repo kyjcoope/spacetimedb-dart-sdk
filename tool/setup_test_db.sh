@@ -64,6 +64,20 @@ if ! spacetime publish notesdb --server http://localhost:3000; then
     exit 1
 fi
 
+# Generate test code from notesdb schema
+echo "🔧 Generating test code from notesdb schema..."
+cd "$SCRIPT_DIR/.."
+dart run spacetimedb_dart_sdk:generate \
+    -d notesdb \
+    -s http://localhost:3000 \
+    -o test/generated
+
+if [ $? -ne 0 ]; then
+    echo "❌ Code generation failed"
+    exit 1
+fi
+echo "✅ Generated test code in test/generated/"
+
 echo ""
 echo "✅ Test environment setup complete!"
 echo ""

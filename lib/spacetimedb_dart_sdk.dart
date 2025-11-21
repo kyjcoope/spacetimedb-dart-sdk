@@ -3,6 +3,9 @@ library spacetimedb_dart_sdk;
 // Core connection
 export 'src/connection/spacetimedb_connection.dart';
 export 'src/connection/connection_state.dart';
+export 'src/connection/connection_status.dart';
+export 'src/connection/connection_quality.dart';
+export 'src/connection/connection_config.dart';
 export 'src/subscription/subscription_manager.dart';
 
 // BSATN encoding/decoding

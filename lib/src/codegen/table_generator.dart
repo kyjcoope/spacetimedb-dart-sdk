@@ -13,12 +13,32 @@ class TableGenerator {
     buf.writeln('// GENERATED CODE - DO NOT MODIFY BY HAND');
     buf.writeln();
     buf.writeln("import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';");
-    buf.writeln();
 
     final productType = schema.typeSpace.types[table.productTypeRef].product;
     if (productType == null) {
       throw Exception('Table ${table.name} has no product type');
     }
+
+    // Collect imports for Ref types
+    final imports = <String>{};
+    for (final element in productType.elements) {
+      if (TypeMapper.isRefType(element.algebraicType)) {
+        final refTypeName = TypeMapper.getRefTypeName(
+          element.algebraicType,
+          schema.types,
+        );
+        if (refTypeName != null) {
+          final fileName = _toSnakeCase(refTypeName);
+          imports.add("import '$fileName.dart';");
+        }
+      }
+    }
+
+    // Add imports
+    for (final import in imports) {
+      buf.writeln(import);
+    }
+    buf.writeln();
 
     final className = _toPascalCase(table.name);
     buf.writeln('class $className {');
@@ -26,7 +46,11 @@ class TableGenerator {
     // Fields
     for (final element in productType.elements) {
       final fieldName = element.name ?? 'unknown';
-      final dartType = TypeMapper.toDartType(element.algebraicType);
+      final dartType = TypeMapper.toDartType(
+        element.algebraicType,
+        typeSpace: schema.typeSpace,
+        typeDefs: schema.types,
+      );
       buf.writeln('  final $dartType $fieldName;');
     }
     buf.writeln();
@@ -44,8 +68,14 @@ class TableGenerator {
     buf.writeln('  void encodeBsatn(BsatnEncoder encoder) {');
     for (final element in productType.elements) {
       final fieldName = element.name ?? 'unknown';
-      final method = TypeMapper.getEncoderMethod(element.algebraicType);
-      buf.writeln('    encoder.$method($fieldName);');
+
+      if (TypeMapper.isRefType(element.algebraicType)) {
+        // For Ref types, call the type's encode method
+        buf.writeln('    $fieldName.encode(encoder);');
+      } else {
+        final method = TypeMapper.getEncoderMethod(element.algebraicType);
+        buf.writeln('    encoder.$method($fieldName);');
+      }
     }
     buf.writeln('  }');
     buf.writeln();
@@ -55,8 +85,19 @@ class TableGenerator {
     buf.writeln('    return $className(');
     for (final element in productType.elements) {
       final fieldName = element.name ?? 'unknown';
-      final method = TypeMapper.getDecoderMethod(element.algebraicType);
-      buf.writeln('      $fieldName: decoder.$method(),');
+
+      if (TypeMapper.isRefType(element.algebraicType)) {
+        // For Ref types, call the type's decode factory
+        final typeName = TypeMapper.toDartType(
+          element.algebraicType,
+          typeSpace: schema.typeSpace,
+          typeDefs: schema.types,
+        );
+        buf.writeln('      $fieldName: $typeName.decode(decoder),');
+      } else {
+        final method = TypeMapper.getDecoderMethod(element.algebraicType);
+        buf.writeln('      $fieldName: decoder.$method(),');
+      }
     }
     buf.writeln('    );');
     buf.writeln('  }');
@@ -94,5 +135,12 @@ class TableGenerator {
     return input.split('_').map((word) {
       return word[0].toUpperCase() + word.substring(1).toLowerCase();
     }).join('');
+  }
+
+  String _toSnakeCase(String input) {
+    return input
+        .replaceAllMapped(
+            RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}')
+        .replaceFirst(RegExp(r'^_'), '');
   }
 }

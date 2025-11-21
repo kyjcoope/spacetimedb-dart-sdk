@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
-import 'note_decoder.dart';
-import 'reducer_arg_decoders.dart';
+import '../generated/note.dart';
+import '../generated/reducer_args.dart';
+import '../helpers/integration_test_helper.dart';
+
+@Tags(['integration'])
 
 /// Test calling reducers to create and update notes
-///
-/// Before running:
-/// 1. spacetime start
-/// 2. cd spacetime_test_module && spacetime publish notesdb --server http://localhost:3000
-/// 3. dart test test/integration/reducer_test.dart
 
 void main() {
+  setUpAll(ensureTestEnvironment);
   late SpacetimeDbConnection connection;
   late SubscriptionManager subManager;
   late TableCache<Note> noteTable;

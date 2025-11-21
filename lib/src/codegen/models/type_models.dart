@@ -18,14 +18,24 @@ class TypeSpace {
 
 class AlgebraicType {
   final ProductType? product;
+  final SumType? sum;
 
-  AlgebraicType({this.product});
+  AlgebraicType({this.product, this.sum});
+
+  bool get isProduct => product != null;
+  bool get isSum => sum != null;
 
   factory AlgebraicType.fromJson(Map<String, dynamic> json) {
     if (json.containsKey('Product')) {
       return AlgebraicType(product: ProductType.fromJson(json['Product']));
     }
-    // For now, only handle Product types
+
+    // Handle Sum types
+    if (json.containsKey('Sum')) {
+      return AlgebraicType(sum: SumType.fromJson(json['Sum']));
+    }
+
+    // Primitive or unknown type
     return AlgebraicType();
   }
 }
@@ -87,6 +97,42 @@ class TypeDef {
       name: typeName,
       typeRef: json['ty'] ?? 0,
       customOrdering: json['custom_ordering'] ?? false,
+    );
+  }
+}
+
+class SumType {
+  final List<SumVariant> variants;
+
+  SumType({required this.variants});
+
+  factory SumType.fromJson(Map<String, dynamic> json) {
+    final variantsJson = json['variants'];
+
+    return SumType(
+      variants: variantsJson is List
+          ? variantsJson.map((v) => SumVariant.fromJson(v)).toList()
+          : [],
+    );
+  }
+}
+
+class SumVariant {
+  final String? name;           // Variant name (e.g., "Weapon", "Potion")
+  final AlgebraicType algebraicType; // The variant's payload type
+  final Map<String, dynamic> algebraicTypeJson; // Original JSON for type mapping
+
+  SumVariant({this.name, required this.algebraicType, required this.algebraicTypeJson});
+
+  factory SumVariant.fromJson(Map<String, dynamic> json) {
+    final nameObj = json['name'];
+    final variantName = nameObj?['some'] ?? "";
+    final algebraicTypeJson = json['algebraic_type'] ?? {};
+
+    return SumVariant(
+      name: variantName.isNotEmpty ? variantName : null,
+      algebraicType: AlgebraicType.fromJson(algebraicTypeJson),
+      algebraicTypeJson: algebraicTypeJson,
     );
   }
 }

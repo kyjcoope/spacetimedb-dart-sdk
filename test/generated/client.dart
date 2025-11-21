@@ -1,16 +1,19 @@
-
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
 import 'dart:async';
 
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import 'reducers.dart';
+import 'reducer_args.dart';
 import 'note.dart';
 
 class SpacetimeDbClient {
   final SpacetimeDbConnection connection;
   final SubscriptionManager subscriptions;
   late final Reducers reducers;
+
+  /// Access to ReducerEmitter for event-driven patterns
+  ReducerEmitter get reducerEmitter => subscriptions.reducerEmitter;
 
   TableCache<Note> get note {
     return subscriptions.cache.getTableByTypedName<Note>('note');
@@ -30,7 +33,8 @@ class SpacetimeDbClient {
     required this.connection,
     required this.subscriptions,
   }) {
-    reducers = Reducers(connection);
+    // Initialize Reducers with connection and ReducerEmitter
+    reducers = Reducers(connection, subscriptions.reducerEmitter);
   }
 
   static Future<SpacetimeDbClient> connect({
@@ -54,6 +58,12 @@ class SpacetimeDbClient {
     // Auto-register view decoders
     subscriptionManager.cache.registerDecoder<Note>('all_notes', NoteDecoder());
     subscriptionManager.cache.registerDecoder<Note>('first_note', NoteDecoder());
+
+    // Auto-register reducer argument decoders
+    subscriptionManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('init', InitArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());
 
     final client = SpacetimeDbClient._(
       connection: connection,

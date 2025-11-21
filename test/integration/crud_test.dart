@@ -2,10 +2,14 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
 import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
-import 'note_decoder.dart';
-import 'reducer_arg_decoders.dart';
+import '../generated/note.dart';
+import '../generated/reducer_args.dart';
+import '../helpers/integration_test_helper.dart';
+
+@Tags(['integration'])
 
 void main() {
+  setUpAll(ensureTestEnvironment);
   // Increase timeout for integration tests involving network
   test('CRUD operations (Create, Read, Update, Delete)', () async {
     final connection = SpacetimeDbConnection(

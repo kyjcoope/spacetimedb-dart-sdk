@@ -30,8 +30,15 @@ export 'src/reducers/reducer_caller.dart';
 export 'src/reducers/reducer_arg_decoder.dart';
 export 'src/reducers/reducer_registry.dart';
 export 'src/reducers/reducer_emitter.dart';
+export 'src/reducers/transaction_result.dart';
 
 // Events
 export 'src/events/event.dart';
 export 'src/events/event_context.dart';
 export 'src/events/table_event.dart';
+
+// Authentication
+export 'src/auth/auth_token_store.dart';
+export 'src/auth/in_memory_token_store.dart';
+export 'src/auth/oidc_helper.dart';
+export 'src/auth/identity.dart';

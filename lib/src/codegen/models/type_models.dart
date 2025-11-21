@@ -30,12 +30,10 @@ class AlgebraicType {
       return AlgebraicType(product: ProductType.fromJson(json['Product']));
     }
 
-    // Handle Sum types
     if (json.containsKey('Sum')) {
       return AlgebraicType(sum: SumType.fromJson(json['Sum']));
     }
 
-    // Primitive or unknown type
     return AlgebraicType();
   }
 }
@@ -118,9 +116,9 @@ class SumType {
 }
 
 class SumVariant {
-  final String? name;           // Variant name (e.g., "Weapon", "Potion")
-  final AlgebraicType algebraicType; // The variant's payload type
-  final Map<String, dynamic> algebraicTypeJson; // Original JSON for type mapping
+  final String? name;          
+  final AlgebraicType algebraicType;
+  final Map<String, dynamic> algebraicTypeJson; 
 
   SumVariant({this.name, required this.algebraicType, required this.algebraicTypeJson});
 

@@ -139,22 +139,27 @@ void main() {
     });
 
     test('Invalid reducer arguments are handled', () async {
-      // A. PREPARE LISTENER - just wait for next transaction
-      final updateFuture = subManager.onTransactionUpdate.first;
+      // Server behavior: Silent Drop (security pattern)
+      // When args fail to deserialize, server drops the message silently
+      // rather than risk responding to a potentially malicious request.
 
       // B. ACTION - send invalid args (0 arguments instead of 2 strings)
-      await subManager.reducers.callWith('create_note', (encoder) {
+      final future = subManager.reducers.callWith('create_note', (encoder) {
         // Send nothing - wrong number of arguments
-      });
+      }, timeout: Duration(milliseconds: 200));
 
-      // C. WAIT
-      final update = await updateFuture.timeout(Duration(seconds: 2));
+      // C. EXPECT TIMEOUT
+      // Server will not respond, so client must time out
+      await expectLater(
+        future,
+        throwsA(isA<TimeoutException>()),
+        reason: 'Server silently drops malformed messages; client must timeout'
+      );
 
-      // D. ASSERT - server accepted with defaults
-      expect(update, isA<TransactionUpdateMessage>(),
-          reason: 'Server should send TransactionUpdate');
-      expect(update.reducerCall.reducerName, equals('create_note'),
-          reason: 'Reducer name should match');
+      // D. VERIFY CONNECTION STILL ALIVE
+      // Server didn't close connection, just ignored that one message
+      expect(connection.isConnected, isTrue,
+          reason: 'Connection should remain open after malformed message');
     });
 
     test('Procedure with wrong argument types', () async {

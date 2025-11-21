@@ -1,8 +1,6 @@
-/// View schema models for SpacetimeDB
 
 import 'type_models.dart';
 
-/// ViewSchema - view definition
 class ViewSchema {
   final String name;
   final int index;

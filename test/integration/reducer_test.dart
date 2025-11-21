@@ -82,11 +82,12 @@ void main() {
 
     test('update_note reducer updates an existing note', () async {
       // First, create a note to update
+      final createTxFuture = subManager.onTransactionUpdate.first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('Original Title');
         encoder.writeString('Original Content');
       });
-      await subManager.onTransactionUpdate.first.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;
@@ -131,11 +132,12 @@ void main() {
 
     test('delete_note reducer deletes a note', () async {
       // First, create a note to delete
+      final createTxFuture = subManager.onTransactionUpdate.first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('To Delete');
         encoder.writeString('This will be deleted');
       });
-      await subManager.onTransactionUpdate.first.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;
@@ -256,11 +258,12 @@ void main() {
 
     test('Table delete stream emits deleted notes', () async {
       // First, create a note
+      final createTxFuture = subManager.onTransactionUpdate.first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('Delete Stream Test');
         encoder.writeString('Will be deleted');
       });
-      await subManager.onTransactionUpdate.first.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;

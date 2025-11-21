@@ -220,7 +220,6 @@ class SchemaExtractor {
       }
     }
 
-    // Otherwise, return as-is (already unwrapped or different format)
     return json;
   }
 }

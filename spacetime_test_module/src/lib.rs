@@ -25,7 +25,14 @@ pub struct Note {
 /// Reducer to create a new note
 #[reducer]
 pub fn create_note(ctx: &ReducerContext, title: String, content: String) {
-    let id = ctx.db.note().count() as u32 + 1;
+    // Find the maximum ID and add 1 to ensure uniqueness
+    let max_id = ctx.db.note()
+        .iter()
+        .map(|note| note.id)
+        .max()
+        .unwrap_or(0);
+
+    let id = max_id + 1;
     let timestamp = 0;
 
     ctx.db.note().insert(Note {

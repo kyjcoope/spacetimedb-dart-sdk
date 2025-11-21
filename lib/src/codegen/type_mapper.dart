@@ -54,12 +54,10 @@ class TypeMapper {
     TypeSpace? typeSpace,
     List<TypeDef>? typeDefs,
   }) {
-    // 1. Handle Ref types (references to other types)
     if (algebraicType.containsKey('Ref')) {
       final typeIndex = algebraicType['Ref'] as int;
 
       if (typeSpace != null && typeDefs != null) {
-        // Find the TypeDef that references this type
         final typeDef = typeDefs.firstWhere(
           (td) => td.typeRef == typeIndex,
           orElse: () => TypeDef(scope: [], name: '', typeRef: -1, customOrdering: false),
@@ -70,7 +68,7 @@ class TypeMapper {
         }
       }
 
-      return 'dynamic'; // Fallback if we can't resolve
+      return 'dynamic'; 
     }
 
     // 2. Handle Array types (recursive)

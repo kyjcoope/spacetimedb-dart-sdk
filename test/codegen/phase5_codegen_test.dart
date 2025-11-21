@@ -78,10 +78,11 @@ void main() {
       // Should import reducer_args.dart
       expect(code, contains("import 'reducer_args.dart';"));
 
-      // Should accept ReducerEmitter in constructor
+      // Should accept ReducerCaller and ReducerEmitter in constructor
+      expect(code, contains('final ReducerCaller _reducerCaller;'));
       expect(code, contains('final ReducerEmitter _reducerEmitter;'));
       expect(code,
-          contains('Reducers(this._connection, this._reducerEmitter);'));
+          contains('Reducers(this._reducerCaller, this._reducerEmitter);'));
 
       // Should generate onCreateNote method
       expect(code, contains('StreamSubscription<void> onCreateNote('));
@@ -152,8 +153,8 @@ void main() {
       // Should expose reducerEmitter getter
       expect(code, contains('ReducerEmitter get reducerEmitter => subscriptions.reducerEmitter;'));
 
-      // Should pass ReducerEmitter to Reducers
-      expect(code, contains('reducers = Reducers(connection, subscriptions.reducerEmitter);'));
+      // Should pass ReducerCaller and ReducerEmitter to Reducers
+      expect(code, contains('reducers = Reducers(subscriptions.reducers, subscriptions.reducerEmitter);'));
     });
 
     test('ClientGenerator auto-registers reducer arg decoders', () {

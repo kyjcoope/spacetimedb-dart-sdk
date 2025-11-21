@@ -62,15 +62,15 @@ void main() {
       // Verify reducers.dart content
       final reducersContent = await reducersFile.readAsString();
       expect(reducersContent, contains('class Reducers {'));
-      expect(reducersContent, contains('Future<void> createNote({'));
+      expect(reducersContent, contains('Future<TransactionResult> createNote({'));
       expect(reducersContent, contains('required String title,'));
       expect(reducersContent, contains('required String content,'));
-      expect(reducersContent, contains('Future<void> init()'));
-      expect(reducersContent, contains('Future<void> updateNote({'));
+      expect(reducersContent, contains('Future<TransactionResult> init()'));
+      expect(reducersContent, contains('Future<TransactionResult> updateNote({'));
       expect(reducersContent, contains('required int noteId,'));
-      expect(reducersContent, contains("await _connection.callReducer('create_note'"));
-      expect(reducersContent, contains("await _connection.callReducer('init'"));
-      expect(reducersContent, contains("await _connection.callReducer('update_note'"));
+      expect(reducersContent, contains("return await _reducerCaller.call('create_note', encoder.toBytes())"));
+      expect(reducersContent, contains("return await _reducerCaller.call('init', encoder.toBytes())"));
+      expect(reducersContent, contains("return await _reducerCaller.call('update_note', encoder.toBytes())"));
 
       // Verify client.dart content
       final clientContent = await clientFile.readAsString();
@@ -80,7 +80,8 @@ void main() {
       expect(clientContent, contains('static Future<SpacetimeDbClient> connect({'));
       expect(clientContent, contains('required String host,'));
       expect(clientContent, contains('required String database,'));
-      expect(clientContent, contains('String? authToken,'));
+      expect(clientContent, contains('AuthTokenStore? authStorage,'));
+      expect(clientContent, contains('bool ssl = false,'));
       expect(clientContent, contains('List<String>? initialSubscriptions,'));
       expect(clientContent, contains('Future<void> disconnect()'));
 
@@ -127,7 +128,7 @@ void main() {
 
       // Verify proper method signatures (should end with ; or { or })
       expect(noteContent, matches(r'void encodeBsatn\(BsatnEncoder encoder\) \{'));
-      expect(reducersContent, matches(r'Future<void> createNote\({'));
+      expect(reducersContent, matches(r'Future<TransactionResult> createNote\({'));
       expect(clientContent, matches(r'static Future<\w+Client> connect\({'));
 
       // Verify no obvious syntax errors

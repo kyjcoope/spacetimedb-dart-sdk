@@ -11,8 +11,10 @@ import '../messages/client_messages.dart';
 import '../reducers/reducer_caller.dart';
 import '../reducers/reducer_registry.dart';
 import '../reducers/reducer_emitter.dart';
+import '../reducers/transaction_result.dart';
 import '../events/event.dart';
 import '../events/event_context.dart';
+import '../auth/identity.dart';
 
 /// Manages table subscriptions and processes real-time updates from SpacetimeDB
 ///
@@ -61,6 +63,10 @@ class SubscriptionManager {
   final ReducerRegistry reducerRegistry = ReducerRegistry();
   final ReducerEmitter reducerEmitter = ReducerEmitter();
   final Logger _logger = Logger();
+
+  // Identity and connection info
+  Identity? _identity;
+  String? _address;
 
   final _initialSubscriptionController =
       StreamController<InitialSubscriptionMessage>.broadcast();
@@ -114,6 +120,17 @@ class SubscriptionManager {
   Stream<ProcedureResultMessage> get onProcedureResult =>
       _procedureResultController.stream;
 
+  /// Current user identity (32-byte public key hash)
+  ///
+  /// Available after connection is established and IdentityToken message is received.
+  /// Use `identity?.toHexString` for ownership checks or `identity?.toAbbreviated` for UI display.
+  Identity? get identity => _identity;
+
+  /// Current connection address (16-byte connection ID as hex string)
+  ///
+  /// Available after connection is established and IdentityToken message is received.
+  String? get address => _address;
+
   void _startListening() {
     _messageSubscription = _connection.onMessage.listen(_handleMessage);
   }
@@ -132,6 +149,11 @@ class SubscriptionManager {
   void _routeMessage(ServerMessage message) {
     switch (message) {
       case IdentityTokenMessage():
+        // Store identity and address for public access
+        _identity = Identity(message.identity);
+        _address = message.connectionId
+            .map((b) => b.toRadixString(16).padLeft(2, '0'))
+            .join();
         _identityTokenController.add(message);
       case InitialSubscriptionMessage():
         _handleInitialSubscription(message);
@@ -194,7 +216,16 @@ class SubscriptionManager {
   }
 
   void _handleTransactionUpdate(TransactionUpdateMessage message) {
-    // 1. Create Event from transaction message
+    // DUAL DISPATCH: This message serves two purposes:
+    // 1. Complete pending reducer Future (if we initiated this call)
+    // 2. Update table cache and emit events (always happens)
+
+    // Route to ReducerCaller first (completes Future if request_id matches)
+    final result = TransactionResult.fromTransactionUpdate(message);
+    reducers.completeRequest(message.reducerCall.requestId, result);
+
+    // Then handle table updates and events
+    // Create Event from transaction message
     Event event;
 
     // Attempt to deserialize reducer arguments
@@ -224,7 +255,7 @@ class SubscriptionManager {
       _logger.w('Failed to deserialize reducer args for: ${message.reducerCall.reducerName}');
     }
 
-    // 2. Create EventContext
+    // 3. Create EventContext
     // Note: Client reference will be wired up properly in Phase 5 (code generation)
     // For now, we use a placeholder that will be replaced by generated code
     final context = EventContext(
@@ -232,13 +263,13 @@ class SubscriptionManager {
       event: event,
     );
 
-    // 3. Emit reducer completion event (Phase 4)
+    // 4. Emit reducer completion event (Phase 4)
     if (event is ReducerEvent) {
       reducerEmitter.emit(event.reducerName, context);
       _logger.d('Emitted reducer completion event for: ${event.reducerName}');
     }
 
-    // 4. Apply table updates with context
+    // 5. Apply table updates with context
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) continue;
 
@@ -254,6 +285,13 @@ class SubscriptionManager {
   }
 
   void _handleTransactionUpdateLight(TransactionUpdateLightMessage message) {
+    // DUAL DISPATCH: Handle both reducer completion and table updates
+
+    // Route to ReducerCaller first (completes Future if request_id matches)
+    final result = TransactionResult.fromTransactionUpdateLight(message);
+    reducers.completeRequest(message.requestId, result);
+
+    // Then handle table updates
     // Light messages don't include reducer info, so create UnknownTransactionEvent
     final event = UnknownTransactionEvent();
     final context = EventContext(
@@ -261,6 +299,7 @@ class SubscriptionManager {
       event: event,
     );
 
+    // 3. Apply table updates
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) continue;
 

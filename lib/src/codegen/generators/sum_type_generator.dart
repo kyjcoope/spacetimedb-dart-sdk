@@ -2,10 +2,10 @@ import '../models/type_models.dart';
 import '../type_mapper.dart';
 
 enum VariantType {
-  unit,          // No payload
-  tupleSingle,   // Single unnamed field
-  tupleMultiple, // Multiple unnamed fields
-  struct,        // Named fields
+  unit,          
+  tupleSingle,   
+  tupleMultiple, 
+  struct,        
 }
 
 class SumTypeGenerator {
@@ -24,17 +24,14 @@ class SumTypeGenerator {
   String generate() {
     final buffer = StringBuffer();
 
-    // Header comment
     buffer.writeln('// GENERATED CODE - DO NOT MODIFY BY HAND');
     buffer.writeln();
     buffer.writeln("import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';");
     buffer.writeln();
 
-    // 1. Generate sealed base class
     buffer.writeln(_generateSealedClass());
     buffer.writeln();
 
-    // 2. Generate variant classes
     for (var i = 0; i < sumType.variants.length; i++) {
       buffer.writeln(_generateVariantClass(sumType.variants[i], i));
       buffer.writeln();
@@ -104,15 +101,12 @@ class $className extends $enumName {
 
   String _generateTupleSingleVariant(
       String className, SumVariant variant, int tag) {
-    // Use the original JSON to get the type
     final type = variant.algebraicType;
     final Map<String, dynamic> algebraicType;
 
     if (type.product != null && type.product!.elements.isNotEmpty) {
-      // It's a Product with one element
       algebraicType = type.product!.elements[0].algebraicType;
     } else {
-      // It's a primitive type directly - use the original JSON
       algebraicType = variant.algebraicTypeJson;
     }
 

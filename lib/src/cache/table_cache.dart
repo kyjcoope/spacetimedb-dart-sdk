@@ -391,7 +391,6 @@ class TableCache<T> {
       if (primaryKey != null) {
         _rowsByPrimaryKey.remove(primaryKey);
       } else {
-        // For tables without primary key, remove by equality
         _rows.remove(row);
       }
     }
@@ -497,9 +496,9 @@ enum ChangeType { insert, update, delete }
 /// Represents any change to a table row
 class TableChange<T> {
   final ChangeType type;
-  final T? row; // For insert/delete
-  final T? oldRow; // For update
-  final T? newRow; // For update
+  final T? row; 
+  final T? oldRow;
+  final T? newRow; 
 
   TableChange.insert(this.row)
       : type = ChangeType.insert,

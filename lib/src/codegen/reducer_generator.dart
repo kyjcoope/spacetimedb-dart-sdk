@@ -20,11 +20,18 @@ class ReducerGenerator {
     buf.writeln();
 
     // Class definition
+    buf.writeln('/// Generated reducer methods with async/await support');
+    buf.writeln('///');
+    buf.writeln('/// All methods return Future<TransactionResult> containing:');
+    buf.writeln('/// - status: Committed/Failed/OutOfEnergy');
+    buf.writeln('/// - timestamp: When the reducer executed');
+    buf.writeln('/// - energyConsumed: Energy used (null for TransactionUpdateLight)');
+    buf.writeln('/// - executionDuration: How long it took (null for TransactionUpdateLight)');
     buf.writeln('class Reducers {');
-    buf.writeln('  final SpacetimeDbConnection _connection;');
+    buf.writeln('  final ReducerCaller _reducerCaller;');
     buf.writeln('  final ReducerEmitter _reducerEmitter;');
     buf.writeln();
-    buf.writeln('  Reducers(this._connection, this._reducerEmitter);');
+    buf.writeln('  Reducers(this._reducerCaller, this._reducerEmitter);');
     buf.writeln();
 
     // Generate call method for each reducer
@@ -72,8 +79,19 @@ class ReducerGenerator {
   void _generateReducerMethod(StringBuffer buf, ReducerSchema reducer) {
     final methodName = _toCamelCase(reducer.name);
 
-    // Method signature
-    buf.write('  Future<void> $methodName(');
+    // Method documentation
+    buf.writeln('  /// Call the ${reducer.name} reducer');
+    buf.writeln('  ///');
+    buf.writeln('  /// Returns [TransactionResult] with execution metadata:');
+    buf.writeln('  /// - `result.isSuccess` - Check if reducer committed');
+    buf.writeln('  /// - `result.energyConsumed` - Energy used (null for lightweight responses)');
+    buf.writeln('  /// - `result.executionDuration` - How long it took (null for lightweight responses)');
+    buf.writeln('  ///');
+    buf.writeln('  /// Throws [ReducerException] if the reducer fails or runs out of energy.');
+    buf.writeln('  /// Throws [TimeoutException] if the reducer doesn\'t complete within the timeout.');
+
+    // Method signature with TransactionResult return type
+    buf.write('  Future<TransactionResult> $methodName(');
 
     if (reducer.params.elements.isEmpty) {
       buf.writeln(') async {');
@@ -96,8 +114,8 @@ class ReducerGenerator {
     }
     buf.writeln();
 
-    // Call reducer
-    buf.writeln("    await _connection.callReducer('${reducer.name}', encoder.toBytes());");
+    // Call reducer and return result
+    buf.writeln("    return await _reducerCaller.call('${reducer.name}', encoder.toBytes());");
     buf.writeln('  }');
   }
 
@@ -189,8 +207,8 @@ class ReducerGenerator {
 
   /// Generate the decoder for a reducer's arguments
   void _generateReducerDecoder(StringBuffer buf, ReducerSchema reducer) {
-    final argsClassName = _toPascalCase(reducer.name) + 'Args';
-    final decoderClassName = _toPascalCase(reducer.name) + 'ArgsDecoder';
+    final argsClassName = '${_toPascalCase(reducer.name)}Args';
+    final decoderClassName = '${_toPascalCase(reducer.name)}ArgsDecoder';
 
     buf.writeln('/// Decoder for ${reducer.name} reducer arguments');
     buf.writeln('class $decoderClassName implements ReducerArgDecoder<$argsClassName> {');

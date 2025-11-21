@@ -28,3 +28,8 @@ migrate_working_dir/
 .dart_tool/
 build/
 .test_setup_done
+
+# Development notes
+show_failed_tests
+test_writing_protocol
+system_protocol.md

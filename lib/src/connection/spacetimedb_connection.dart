@@ -34,7 +34,7 @@ typedef WebSocketFactory = WebSocketChannel Function(
 /// final connection = SpacetimeDbConnection(
 ///   host: 'localhost:3000',
 ///   database: 'mydb',
-///   authToken: 'optional-token',
+///   initialToken: 'optional-token',
 /// );
 ///
 /// // Listen to connection state changes
@@ -54,7 +54,8 @@ typedef WebSocketFactory = WebSocketChannel Function(
 class SpacetimeDbConnection {
   final String host;
   final String database;
-  final String? authToken;
+  final String? initialToken;
+  final bool ssl;
   final ConnectionConfig config;
   final WebSocketFactory _socketFactory;
 
@@ -65,6 +66,9 @@ class SpacetimeDbConnection {
   Timer? _reconnectTimer;
   bool _shouldReconnect = false;
   int _nextRequestId = 1;
+
+  // Current authentication token
+  String? _currentToken;
 
   // Keep-alive monitoring
   KeepAliveMonitor? _keepAlive;
@@ -110,10 +114,12 @@ class SpacetimeDbConnection {
   SpacetimeDbConnection({
     required this.host,
     required this.database,
-    this.authToken,
+    this.initialToken,
+    this.ssl = false,
     this.config = const ConnectionConfig(),
     WebSocketFactory? socketFactory,
-  }) : _socketFactory = socketFactory ??
+  })  : _currentToken = initialToken,
+        _socketFactory = socketFactory ??
             ((uri, protocols, headers) => IOWebSocketChannel.connect(
                   uri,
                   protocols: protocols,
@@ -127,6 +133,18 @@ class SpacetimeDbConnection {
 
   bool get isConnected => _state == ConnectionState.connected;
 
+  /// The current authentication token, if any
+  String? get token => _currentToken;
+
+  /// Updates the current authentication token
+  ///
+  /// This is typically called automatically when an IdentityToken message
+  /// is received from the server.
+  void updateToken(String token) {
+    _currentToken = token;
+    _logger.i('Authentication token updated');
+  }
+
   Future<void> connect() async {
     if (_state != ConnectionState.disconnected) {
       _logger.w('Already connected or connecting');
@@ -137,11 +155,12 @@ class SpacetimeDbConnection {
     _updateStatus(ConnectionStatus.connecting);
 
     try {
-      final uri = Uri.parse('ws://$host/v1/database/$database/subscribe');
+      final protocol = ssl ? 'wss' : 'ws';
+      final uri = Uri.parse('$protocol://$host/v1/database/$database/subscribe');
 
       final headers = <String, dynamic>{};
-      if (authToken != null) {
-        headers['Authorization'] = 'Bearer $authToken';
+      if (_currentToken != null) {
+        headers['Authorization'] = 'Bearer $_currentToken';
       }
 
       _channel = _socketFactory(
@@ -396,6 +415,11 @@ class SpacetimeDbConnection {
   ///
   /// await connection.callReducer('create_note', encoder.toBytes());
   /// ```
+  ///
+  /// **Note:** This is a low-level method that sends the message but doesn't
+  /// track the response. For full async/await support with TransactionResult,
+  /// use `SubscriptionManager.reducers.call()` instead.
+  @Deprecated('Use SubscriptionManager.reducers.call() for async/await support')
   Future<void> callReducer(String reducerName, Uint8List args,
       {int? requestId}) async {
     final message = CallReducerMessage(

@@ -4,13 +4,29 @@ import 'dart:async';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import 'reducer_args.dart';
 
+/// Generated reducer methods with async/await support
+///
+/// All methods return Future<TransactionResult> containing:
+/// - status: Committed/Failed/OutOfEnergy
+/// - timestamp: When the reducer executed
+/// - energyConsumed: Energy used (null for TransactionUpdateLight)
+/// - executionDuration: How long it took (null for TransactionUpdateLight)
 class Reducers {
-  final SpacetimeDbConnection _connection;
+  final ReducerCaller _reducerCaller;
   final ReducerEmitter _reducerEmitter;
 
-  Reducers(this._connection, this._reducerEmitter);
+  Reducers(this._reducerCaller, this._reducerEmitter);
 
-  Future<void> createNote({
+  /// Call the create_note reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> createNote({
     required String title,
     required String content,
   }) async {
@@ -18,25 +34,52 @@ class Reducers {
     encoder.writeString(title);
     encoder.writeString(content);
 
-    await _connection.callReducer('create_note', encoder.toBytes());
+    return await _reducerCaller.call('create_note', encoder.toBytes());
   }
 
-  Future<void> deleteNote({
+  /// Call the delete_note reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> deleteNote({
     required int noteId,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeU32(noteId);
 
-    await _connection.callReducer('delete_note', encoder.toBytes());
+    return await _reducerCaller.call('delete_note', encoder.toBytes());
   }
 
-  Future<void> init() async {
+  /// Call the init reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> init() async {
     final encoder = BsatnEncoder();
 
-    await _connection.callReducer('init', encoder.toBytes());
+    return await _reducerCaller.call('init', encoder.toBytes());
   }
 
-  Future<void> updateNote({
+  /// Call the update_note reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> updateNote({
     required int noteId,
     required String title,
     required String content,
@@ -46,7 +89,7 @@ class Reducers {
     encoder.writeString(title);
     encoder.writeString(content);
 
-    await _connection.callReducer('update_note', encoder.toBytes());
+    return await _reducerCaller.call('update_note', encoder.toBytes());
   }
 
   StreamSubscription<void> onCreateNote(void Function(EventContext ctx, String title, String content) callback) {

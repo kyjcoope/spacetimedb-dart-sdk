@@ -27,6 +27,25 @@ class CreateNoteArgsDecoder implements ReducerArgDecoder<CreateNoteArgs> {
   }
 }
 
+/// Arguments for the delete_all_notes reducer
+class DeleteAllNotesArgs {
+  DeleteAllNotesArgs();
+}
+
+/// Decoder for delete_all_notes reducer arguments
+class DeleteAllNotesArgsDecoder implements ReducerArgDecoder<DeleteAllNotesArgs> {
+  @override
+  DeleteAllNotesArgs? decode(BsatnDecoder decoder) {
+    try {
+
+      return DeleteAllNotesArgs(
+      );
+    } catch (e) {
+      return null; // Deserialization failed
+    }
+  }
+}
+
 /// Arguments for the delete_note reducer
 class DeleteNoteArgs {
   final int noteId;

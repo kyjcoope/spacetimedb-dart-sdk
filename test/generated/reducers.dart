@@ -37,6 +37,21 @@ class Reducers {
     return await _reducerCaller.call('create_note', encoder.toBytes());
   }
 
+  /// Call the delete_all_notes reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> deleteAllNotes() async {
+    final encoder = BsatnEncoder();
+
+    return await _reducerCaller.call('delete_all_notes', encoder.toBytes());
+  }
+
   /// Call the delete_note reducer
   ///
   /// Returns [TransactionResult] with execution metadata:
@@ -104,6 +119,21 @@ class Reducers {
 
       // Extract fields from strongly-typed object - NO CASTING
       callback(ctx, args.title, args.content);
+    });
+  }
+
+  StreamSubscription<void> onDeleteAllNotes(void Function(EventContext ctx) callback) {
+    return _reducerEmitter.on('delete_all_notes').listen((EventContext ctx) {
+      // Pattern match to extract ReducerEvent
+      final event = ctx.event;
+      if (event is! ReducerEvent) return;
+
+      // Type guard - ensures args is correct type
+      final args = event.reducerArgs;
+      if (args is! DeleteAllNotesArgs) return;
+
+      // Extract fields from strongly-typed object - NO CASTING
+      callback(ctx);
     });
   }
 

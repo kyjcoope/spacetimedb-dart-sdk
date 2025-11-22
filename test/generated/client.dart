@@ -106,6 +106,7 @@ class SpacetimeDbClient {
 
     // Auto-register reducer argument decoders
     subscriptionManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('delete_all_notes', DeleteAllNotesArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('init', InitArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());

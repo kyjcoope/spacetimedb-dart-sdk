@@ -59,6 +59,18 @@ pub fn delete_note(ctx: &ReducerContext, note_id: u32) {
     ctx.db.note().id().delete(note_id);
 }
 
+/// Delete all notes in a single transaction (for testing multi-delete streams)
+#[reducer]
+pub fn delete_all_notes(ctx: &ReducerContext) {
+    // Collect all note IDs first (can't iterate while modifying)
+    let note_ids: Vec<u32> = ctx.db.note().iter().map(|n| n.id).collect();
+
+    // Delete each note
+    for id in note_ids {
+        ctx.db.note().id().delete(id);
+    }
+}
+
 /// Procedure to add two numbers (stateless computation)
 #[procedure]
 pub fn add_numbers(_ctx: &mut ProcedureContext, a: u32, b: u32) -> u32 {

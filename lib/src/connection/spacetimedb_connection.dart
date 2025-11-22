@@ -10,6 +10,7 @@ import 'package:spacetimedb_dart_sdk/src/connection/connection_quality.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_config.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/keep_alive_monitor.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/client_messages.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -59,7 +60,7 @@ class SpacetimeDbConnection {
   final ConnectionConfig config;
   final WebSocketFactory _socketFactory;
 
-  final Logger _logger = Logger();
+  final Logger _logger = Logger(printer: CustomLogPrinter());
   static final _rng = Random.secure();
 
   int _reconnectAttempts = 0;
@@ -147,7 +148,7 @@ class SpacetimeDbConnection {
 
   Future<void> connect() async {
     if (_state != ConnectionState.disconnected) {
-      _logger.w('Already connected or connecting');
+      _logger.i('Already connected or connecting');
       return;
     }
     _shouldReconnect = true;
@@ -254,7 +255,7 @@ class SpacetimeDbConnection {
   /// ```
   void send(Uint8List data) {
     if (!isConnected) {
-      _logger.w('Cannot send: not connected');
+      _logger.i('Cannot send: not connected');
       return;
     }
     // Debug: Log message type
@@ -436,7 +437,7 @@ class SpacetimeDbConnection {
   void _setupKeepAlive() {
     _keepAlive = KeepAliveMonitor(
       onSendPing: () {
-        _logger.d('Connection idle - sending keep-alive ping');
+        _logger.i('Connection idle - sending keep-alive ping');
         try {
           final messageId = Uint8List(16);
           for (var i = 0; i < 16; i++) {
@@ -456,7 +457,7 @@ class SpacetimeDbConnection {
         }
       },
       onDisconnect: () {
-        _logger.w('Keep-alive timeout - connection declared dead');
+        _logger.i('Keep-alive timeout - connection declared dead');
         _handleStaleConnection();
       },
       idleThreshold: config.pingInterval,

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/cache/client_cache.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
 
 import '../connection/spacetimedb_connection.dart';
 import '../messages/message_decoder.dart';
@@ -62,7 +63,7 @@ class SubscriptionManager {
   late final ReducerCaller reducers;
   final ReducerRegistry reducerRegistry = ReducerRegistry();
   final ReducerEmitter reducerEmitter = ReducerEmitter();
-  final Logger _logger = Logger();
+  final Logger _logger = Logger(printer: CustomLogPrinter());
 
   // Identity and connection info
   Identity? _identity;
@@ -182,11 +183,11 @@ class SubscriptionManager {
   }
 
   void _handleInitialSubscription(InitialSubscriptionMessage message) {
-    _logger.d('Handling InitialSubscription with ${message.tableUpdates.length} table updates');
+    _logger.i('Handling InitialSubscription with ${message.tableUpdates.length} table updates');
 
     // Phase 1: Activate all tables (link decoders to runtime IDs)
     for (final tableUpdate in message.tableUpdates) {
-      _logger.d('  Activating table "${tableUpdate.tableName}" with ID ${tableUpdate.tableId}');
+      _logger.i('  Activating table "${tableUpdate.tableName}" with ID ${tableUpdate.tableId}');
       cache.activateTable(tableUpdate.tableId, tableUpdate.tableName);
     }
 
@@ -205,11 +206,11 @@ class SubscriptionManager {
       }
 
       final table = cache.getTable(tableUpdate.tableId);
-      _logger.d('  Table ${tableUpdate.tableId} ("${tableUpdate.tableName}"): ${tableUpdate.updates.length} updates');
+      _logger.i('  Table ${tableUpdate.tableId} ("${tableUpdate.tableName}"): ${tableUpdate.updates.length} updates');
 
       for (final update in tableUpdate.updates) {
         final rows = update.update.inserts.getRows();
-        _logger.d('    Inserting ${rows.length} rows');
+        _logger.i('    Inserting ${rows.length} rows');
         table.applyInitialData(update.update.inserts, context);
       }
     }
@@ -246,13 +247,13 @@ class SubscriptionManager {
         reducerArgs: reducerArgs,
       );
 
-      _logger.d('Transaction caused by reducer: ${message.reducerCall.reducerName}');
-      _logger.d('Arguments: $reducerArgs');
-      _logger.d('Status: ${message.status}');
+      _logger.i('Transaction caused by reducer: ${message.reducerCall.reducerName}');
+      _logger.i('Arguments: $reducerArgs');
+      _logger.i('Status: ${message.status}');
     } else {
       // Deserialization failed - unknown reducer or corrupt data
       event = UnknownTransactionEvent();
-      _logger.w('Failed to deserialize reducer args for: ${message.reducerCall.reducerName}');
+      _logger.i('Failed to deserialize reducer args for: ${message.reducerCall.reducerName}');
     }
 
     // 3. Create EventContext
@@ -266,7 +267,7 @@ class SubscriptionManager {
     // 4. Emit reducer completion event (Phase 4)
     if (event is ReducerEvent) {
       reducerEmitter.emit(event.reducerName, context);
-      _logger.d('Emitted reducer completion event for: ${event.reducerName}');
+      _logger.i('Emitted reducer completion event for: ${event.reducerName}');
     }
 
     // 5. Apply table updates with context

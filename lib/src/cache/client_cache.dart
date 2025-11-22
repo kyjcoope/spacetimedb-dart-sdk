@@ -184,8 +184,79 @@ class ClientCache {
     return table;
   }
 
-  /// Check if a table is registered.
+  /// Check if a table is registered by ID.
   bool hasTable(int tableId) => _tables.containsKey(tableId);
+
+  /// Check if a table is activated by name.
+  bool hasTableByName(String tableName) => _nameToId.containsKey(tableName);
+
+  /// Check if a builder is registered for a table name.
+  bool hasBuilder(String tableName) => _builders.containsKey(tableName);
+
+  /// Activate an empty table by name only (for when server returns no rows).
+  ///
+  /// When a subscribed table has no rows, the server doesn't include it in
+  /// the InitialSubscription's tableUpdates. This method allows activating
+  /// such tables so they're accessible via getTableByTypedName().
+  ///
+  /// Uses a synthetic table ID (negative) since we don't have the server's ID.
+  /// The table will be re-activated with the real ID if data arrives later.
+  ///
+  /// - [tableName]: The table name to activate
+  ///
+  /// Returns true if table was activated, false if already active or no builder.
+  bool activateEmptyTable(String tableName) {
+    // Already activated
+    if (_nameToId.containsKey(tableName)) {
+      return false;
+    }
+
+    // No builder registered for this table
+    final builder = _builders[tableName];
+    if (builder == null) {
+      return false;
+    }
+
+    // Use a synthetic negative table ID for empty tables
+    // These will be replaced with real IDs when data arrives
+    final syntheticId = -(_nameToId.length + 1);
+
+    final tableCache = builder(syntheticId, tableName);
+    _tables[syntheticId] = tableCache;
+    _nameToId[tableName] = syntheticId;
+
+    return true;
+  }
+
+  /// Link a table that was activated by name to its real server table ID.
+  ///
+  /// When an empty table receives its first data via TransactionUpdate,
+  /// we need to update our mappings to use the real server ID.
+  ///
+  /// Returns the TableCache if linking was successful or table already exists.
+  /// Returns null if the table name wasn't found.
+  TableCache? linkTableId(int tableId, String tableName) {
+    // If table already exists with this ID, return it
+    if (_tables.containsKey(tableId)) {
+      return _tables[tableId];
+    }
+
+    // Check if we have this table under a different (synthetic) ID
+    final existingId = _nameToId[tableName];
+    if (existingId != null && existingId != tableId) {
+      // Move the table from synthetic ID to real ID
+      final table = _tables.remove(existingId);
+      if (table != null) {
+        _tables[tableId] = table;
+        _nameToId[tableName] = tableId;
+        return table;
+      }
+    }
+
+    // Table doesn't exist at all - try to activate it
+    activateTable(tableId, tableName);
+    return _tables[tableId];
+  }
 
   /// Get all registered table IDs.
   Iterable<int> get tableIds => _tables.keys;

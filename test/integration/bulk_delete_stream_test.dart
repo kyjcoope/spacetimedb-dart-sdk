@@ -29,13 +29,28 @@ void main() {
     print('📡 Connecting...');
     await connection.connect();
 
+    // Wait for identity token before subscribing
+    await subManager.onIdentityToken.first;
+
     // 3. Subscribe and Wait for the "Synced" state
     subManager.subscribe(['SELECT * FROM note']);
     await subManager.onInitialSubscription.first;
 
+    // Table is now accessible even if empty (SDK activates empty tables)
     final noteTable = subManager.cache.getTableByTypedName<Note>('note');
     final initialCount = noteTable.count();
     print('✅ Connected & Subscribed. Initial count: $initialCount');
+
+    // =========================================================================
+    // CLEAN SLATE: Delete any existing notes from previous runs
+    // =========================================================================
+    if (initialCount > 0) {
+      print('🧹 Cleaning up $initialCount existing notes...');
+      await subManager.reducers.callWith('delete_all_notes', (encoder) {});
+      // Wait for delete to propagate
+      await Future.delayed(const Duration(milliseconds: 500));
+      print('   ✅ Clean slate established. Count: ${noteTable.count()}');
+    }
 
     // =========================================================================
     // SETUP: Create multiple notes to delete
@@ -73,9 +88,8 @@ void main() {
       deletedNotes.add(note);
       print('   📡 Delete event received for note ${note.id}: ${note.title}');
 
-      // Complete when we've received delete events for all notes in table
-      // (both initial notes from init + our created notes)
-      if (deletedNotes.length >= countAfterInserts) {
+      // Complete when we've received delete events for all created notes
+      if (deletedNotes.length >= notesToCreate) {
         deleteCompleter.complete();
       }
     });
@@ -89,7 +103,7 @@ void main() {
     await deleteCompleter.future.timeout(
       const Duration(seconds: 10),
       onTimeout: () {
-        print('⏱️  Timeout! Only received ${deletedNotes.length}/$countAfterInserts delete events');
+        print('⏱️  Timeout! Only received ${deletedNotes.length}/$notesToCreate delete events');
       },
     );
 
@@ -100,14 +114,14 @@ void main() {
     // =========================================================================
     print('');
     print('📊 Results:');
-    print('   Notes in table before delete: $countAfterInserts');
+    print('   Notes created: $notesToCreate');
     print('   Delete events received: ${deletedNotes.length}');
     print('   Notes in cache after delete: ${noteTable.count()}');
 
     // The core assertion: we should receive a delete event for EVERY deleted note
     expect(
       deletedNotes.length,
-      equals(countAfterInserts),
+      equals(notesToCreate),
       reason: 'deleteStream should fire once for each deleted note in a multi-delete transaction',
     );
 

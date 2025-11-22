@@ -69,6 +69,10 @@ class SubscriptionManager {
   Identity? _identity;
   String? _address;
 
+  // Track table names from pending subscriptions
+  // Used to activate empty tables that don't appear in InitialSubscription
+  List<String> _pendingTableNames = [];
+
   final _initialSubscriptionController =
       StreamController<InitialSubscriptionMessage>.broadcast();
   final _transactionUpdateController =
@@ -185,11 +189,25 @@ class SubscriptionManager {
   void _handleInitialSubscription(InitialSubscriptionMessage message) {
     _logger.i('Handling InitialSubscription with ${message.tableUpdates.length} table updates');
 
-    // Phase 1: Activate all tables (link decoders to runtime IDs)
+    // Phase 1: Activate all tables that have data (link decoders to runtime IDs)
     for (final tableUpdate in message.tableUpdates) {
       _logger.i('  Activating table "${tableUpdate.tableName}" with ID ${tableUpdate.tableId}');
       cache.activateTable(tableUpdate.tableId, tableUpdate.tableName);
     }
+
+    // Phase 1.5: Activate empty tables that weren't included in tableUpdates
+    // The server doesn't include tables with 0 rows in the InitialSubscription
+    final activatedTableNames = message.tableUpdates.map((t) => t.tableName).toSet();
+    for (final tableName in _pendingTableNames) {
+      if (!activatedTableNames.contains(tableName)) {
+        // Table was subscribed but has no rows - activate it as empty
+        if (cache.activateEmptyTable(tableName)) {
+          _logger.i('  Activating empty table "$tableName"');
+        }
+      }
+    }
+    // Clear pending table names
+    _pendingTableNames = [];
 
     // Phase 2: Create EventContext with SubscribeAppliedEvent
     final event = SubscribeAppliedEvent();
@@ -272,9 +290,10 @@ class SubscriptionManager {
 
     // 5. Apply table updates with context
     for (final tableUpdate in message.tableUpdates) {
-      if (!cache.hasTable(tableUpdate.tableId)) continue;
+      // Try to link table ID (handles empty tables that were activated by name)
+      final table = cache.linkTableId(tableUpdate.tableId, tableUpdate.tableName);
+      if (table == null) continue;
 
-      final table = cache.getTable(tableUpdate.tableId);
       for (final update in tableUpdate.updates) {
         table.applyTransactionUpdate(
           update.update.deletes,
@@ -302,9 +321,10 @@ class SubscriptionManager {
 
     // 3. Apply table updates
     for (final tableUpdate in message.tableUpdates) {
-      if (!cache.hasTable(tableUpdate.tableId)) continue;
+      // Try to link table ID (handles empty tables that were activated by name)
+      final table = cache.linkTableId(tableUpdate.tableId, tableUpdate.tableName);
+      if (table == null) continue;
 
-      final table = cache.getTable(tableUpdate.tableId);
       for (final update in tableUpdate.updates) {
         table.applyTransactionUpdate(
           update.update.deletes,
@@ -327,11 +347,32 @@ class SubscriptionManager {
   /// // Data is now available in cache
   /// ```
   Future<void> subscribe(List<String> queries) async {
+    // Extract table names from queries for activation tracking
+    _pendingTableNames = _extractTableNames(queries);
+
     final message = SubscribeMessage(queries);
     _connection.send(message.encode());
 
     // Wait for the initial subscription data to arrive
     await onInitialSubscription.first;
+  }
+
+  /// Extract table names from SQL subscription queries
+  ///
+  /// Parses simple SELECT statements to find table names.
+  /// Supports: "SELECT * FROM tablename" and "SELECT * FROM tablename WHERE ..."
+  List<String> _extractTableNames(List<String> queries) {
+    final tableNames = <String>[];
+    // Regex to find "FROM tablename" (case insensitive)
+    final regex = RegExp(r'FROM\s+([a-zA-Z_][a-zA-Z0-9_]*)', caseSensitive: false);
+
+    for (final query in queries) {
+      final match = regex.firstMatch(query);
+      if (match != null) {
+        tableNames.add(match.group(1)!);
+      }
+    }
+    return tableNames;
   }
 
   /// Subscribes to a single SQL query

@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/cache/row_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/codec/bsatn_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/shared_types.dart';
 import 'package:spacetimedb_dart_sdk/src/events/event_context.dart';
 import 'package:spacetimedb_dart_sdk/src/events/table_event.dart';
 import 'package:spacetimedb_dart_sdk/src/events/event.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
 
 /// Client-side cache for a single SpacetimeDB table
 ///
@@ -46,6 +48,7 @@ class TableCache<T> {
   final int tableId;
   final String tableName;
   final RowDecoder<T> decoder;
+  final Logger _logger = Logger(printer: CustomLogPrinter());
 
   final Map<dynamic, T> _rowsByPrimaryKey = {};
 
@@ -401,6 +404,10 @@ class TableCache<T> {
     final oldValues = <dynamic, T>{};
 
     final deleteBytes = deletes.getRows();
+    if (deleteBytes.isNotEmpty) {
+      _logger.i('Table "$tableName": Processing ${deleteBytes.length} deletes');
+    }
+
     for (final bytes in deleteBytes) {
       final bsatnDecoder = BsatnDecoder(bytes);
       final row = decoder.decode(bsatnDecoder);
@@ -410,6 +417,9 @@ class TableCache<T> {
         if (old != null) {
           oldValues[primaryKey] = old;
           changes.deleted.add(old);
+        } else {
+          // This is the bug case - delete event received but row not in cache
+          _logger.i('DELETE FAILED for table "$tableName": Key "$primaryKey" not found in cache. Available keys: ${_rowsByPrimaryKey.keys.take(5).toList()}...');
         }
       } else {
         _rows.remove(row);

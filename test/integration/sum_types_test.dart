@@ -152,8 +152,8 @@ void main() {
 
     test('Table integration: Ref field is strongly typed', () async {
       // Subscribe to notes table
-      await subManager
-          .subscribe(['SELECT * FROM note'])
+      subManager.subscribe(['SELECT * FROM note']);
+      await subManager.onInitialSubscription.first
           .timeout(Duration(seconds: 5));
 
       // Get the TYPED table (not dynamic!)

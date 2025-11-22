@@ -261,6 +261,9 @@ class ClientCache {
   /// Get all registered table IDs.
   Iterable<int> get tableIds => _tables.keys;
 
+  /// Get all registered builder names (tables that have decoders registered).
+  Iterable<String> get registeredTableNames => _builders.keys;
+
   /// Get the number of registered tables.
   int get tableCount => _tables.length;
 

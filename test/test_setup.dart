@@ -55,18 +55,23 @@ Future<void> setupTestEnvironment() async {
     throw Exception('Build failed: ${buildResult.stderr}');
   }
 
-  // Delete existing database (ignore errors if it doesn't exist)
-  await Process.run('spacetime', ['delete', 'notesdb', '-y']);
+  // Check if database already exists
+  final listResult = await Process.run('spacetime', ['list']);
+  final dbExists = listResult.stdout.toString().contains('notesdb');
 
-  // Publish
-  print('Publishing test module...');
-  final publishResult = await Process.run(
-    'spacetime',
-    ['publish', 'notesdb'],
-    workingDirectory: testModuleDir.path,
-  );
-  if (publishResult.exitCode != 0) {
-    throw Exception('Publish failed: ${publishResult.stderr}');
+  if (dbExists) {
+    print('Database "notesdb" already exists, skipping publish...');
+  } else {
+    // Publish
+    print('Publishing test module...');
+    final publishResult = await Process.run(
+      'spacetime',
+      ['publish', 'notesdb'],
+      workingDirectory: testModuleDir.path,
+    );
+    if (publishResult.exitCode != 0) {
+      throw Exception('Publish failed: ${publishResult.stderr}');
+    }
   }
 
   // Generate test code from notesdb schema

@@ -32,9 +32,10 @@ void main() {
     await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
 
     // Subscribe to notes table
-    await subManager.subscribe(['SELECT * FROM note']);
+    subManager.subscribe(['SELECT * FROM note']);
+    await subManager.onInitialSubscription.first;
 
-    noteTable = subManager.cache.getTable<Note>(4096);
+    noteTable = subManager.cache.getTableByTypedName<Note>('note');
   });
 
   tearDown(() async {
@@ -46,8 +47,10 @@ void main() {
     test('create_note reducer creates a new note', () async {
       final noteCountBefore = noteTable.count();
 
-      // A. PREPARE LISTENER
-      final txUpdateFuture = subManager.onTransactionUpdate.first;
+      // A. PREPARE LISTENER - filter for the specific reducer we're calling
+      final txUpdateFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'create_note')
+          .first;
 
       // B. ACTION
       await subManager.reducers.callWith('create_note', (encoder) {
@@ -82,7 +85,9 @@ void main() {
 
     test('update_note reducer updates an existing note', () async {
       // First, create a note to update
-      final createTxFuture = subManager.onTransactionUpdate.first;
+      final createTxFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'create_note')
+          .first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('Original Title');
         encoder.writeString('Original Content');
@@ -99,8 +104,10 @@ void main() {
       }
       expect(noteId, isNotNull, reason: 'Should have created a note');
 
-      // A. PREPARE LISTENER
-      final txUpdateFuture = subManager.onTransactionUpdate.first;
+      // A. PREPARE LISTENER - filter for update_note
+      final txUpdateFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'update_note')
+          .first;
 
       // B. ACTION - update the note
       await subManager.reducers.callWith('update_note', (encoder) {
@@ -132,7 +139,9 @@ void main() {
 
     test('delete_note reducer deletes a note', () async {
       // First, create a note to delete
-      final createTxFuture = subManager.onTransactionUpdate.first;
+      final createTxFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'create_note')
+          .first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('To Delete');
         encoder.writeString('This will be deleted');
@@ -151,8 +160,10 @@ void main() {
 
       final noteCountBefore = noteTable.count();
 
-      // A. PREPARE LISTENER
-      final txUpdateFuture = subManager.onTransactionUpdate.first;
+      // A. PREPARE LISTENER - filter for delete_note
+      final txUpdateFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'delete_note')
+          .first;
 
       // B. ACTION - delete the note
       await subManager.reducers.callWith('delete_note', (encoder) {

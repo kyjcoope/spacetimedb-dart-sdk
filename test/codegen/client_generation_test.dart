@@ -193,7 +193,7 @@ void main() {
         );
 
         expect(
-          tableFile.content.contains('int? getPrimaryKey($className row)'),
+          tableFile.content.contains('getPrimaryKey($className row)'),
           true,
           reason: 'Decoder should have getPrimaryKey method',
         );

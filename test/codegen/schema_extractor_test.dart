@@ -110,7 +110,8 @@ WARNING: at start
 
       expect(schema.databaseName, 'notesdb');
       expect(schema.tables.isNotEmpty, true);
-      expect(schema.tables.first.name, 'note');
+      expect(schema.tables.map((t) => t.name), contains('note'));
+      expect(schema.tables.map((t) => t.name), contains('folder'));
       expect(schema.reducers.isNotEmpty, true);
     }, tags: ['integration']);
 

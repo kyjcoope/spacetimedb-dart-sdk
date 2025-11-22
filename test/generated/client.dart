@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import 'reducers.dart';
 import 'reducer_args.dart';
+import 'folder.dart';
 import 'note.dart';
 
 class SpacetimeDbClient {
@@ -42,6 +43,10 @@ class SpacetimeDbClient {
   ///
   /// Available after connection is established. Returns null if not authenticated.
   String? get token => connection.token;
+
+  TableCache<Folder> get folder {
+    return subscriptions.cache.getTableByTypedName<Folder>('folder');
+  }
 
   TableCache<Note> get note {
     return subscriptions.cache.getTableByTypedName<Note>('note');
@@ -98,6 +103,7 @@ class SpacetimeDbClient {
     final subscriptionManager = SubscriptionManager(connection);
 
     // Auto-register table decoders
+    subscriptionManager.cache.registerDecoder<Folder>('folder', FolderDecoder());
     subscriptionManager.cache.registerDecoder<Note>('note', NoteDecoder());
 
     // Auto-register view decoders
@@ -105,8 +111,11 @@ class SpacetimeDbClient {
     subscriptionManager.cache.registerDecoder<Note>('first_note', NoteDecoder());
 
     // Auto-register reducer argument decoders
+    subscriptionManager.reducerRegistry.registerDecoder('create_folder', CreateFolderArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('delete_all_folders', DeleteAllFoldersArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('delete_all_notes', DeleteAllNotesArgsDecoder());
+    subscriptionManager.reducerRegistry.registerDecoder('delete_folder', DeleteFolderArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('init', InitArgsDecoder());
     subscriptionManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());

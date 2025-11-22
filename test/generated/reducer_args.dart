@@ -2,6 +2,31 @@
 
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
+/// Arguments for the create_folder reducer
+class CreateFolderArgs {
+  final String path;
+  final String name;
+  CreateFolderArgs({required this.path, required this.name, });
+}
+
+/// Decoder for create_folder reducer arguments
+class CreateFolderArgsDecoder implements ReducerArgDecoder<CreateFolderArgs> {
+  @override
+  CreateFolderArgs? decode(BsatnDecoder decoder) {
+    try {
+      final path = decoder.readString();
+      final name = decoder.readString();
+
+      return CreateFolderArgs(
+        path: path,
+        name: name,
+      );
+    } catch (e) {
+      return null; // Deserialization failed
+    }
+  }
+}
+
 /// Arguments for the create_note reducer
 class CreateNoteArgs {
   final String title;
@@ -27,6 +52,25 @@ class CreateNoteArgsDecoder implements ReducerArgDecoder<CreateNoteArgs> {
   }
 }
 
+/// Arguments for the delete_all_folders reducer
+class DeleteAllFoldersArgs {
+  DeleteAllFoldersArgs();
+}
+
+/// Decoder for delete_all_folders reducer arguments
+class DeleteAllFoldersArgsDecoder implements ReducerArgDecoder<DeleteAllFoldersArgs> {
+  @override
+  DeleteAllFoldersArgs? decode(BsatnDecoder decoder) {
+    try {
+
+      return DeleteAllFoldersArgs(
+      );
+    } catch (e) {
+      return null; // Deserialization failed
+    }
+  }
+}
+
 /// Arguments for the delete_all_notes reducer
 class DeleteAllNotesArgs {
   DeleteAllNotesArgs();
@@ -39,6 +83,28 @@ class DeleteAllNotesArgsDecoder implements ReducerArgDecoder<DeleteAllNotesArgs>
     try {
 
       return DeleteAllNotesArgs(
+      );
+    } catch (e) {
+      return null; // Deserialization failed
+    }
+  }
+}
+
+/// Arguments for the delete_folder reducer
+class DeleteFolderArgs {
+  final String path;
+  DeleteFolderArgs({required this.path, });
+}
+
+/// Decoder for delete_folder reducer arguments
+class DeleteFolderArgsDecoder implements ReducerArgDecoder<DeleteFolderArgs> {
+  @override
+  DeleteFolderArgs? decode(BsatnDecoder decoder) {
+    try {
+      final path = decoder.readString();
+
+      return DeleteFolderArgs(
+        path: path,
       );
     } catch (e) {
       return null; // Deserialization failed

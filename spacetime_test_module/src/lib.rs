@@ -22,6 +22,15 @@ pub struct Note {
     pub status: NoteStatus,
 }
 
+/// Folder table with String primary key (for testing String PK delete events)
+#[table(name = folder, public)]
+pub struct Folder {
+    #[primary_key]
+    pub path: String,
+    pub name: String,
+    pub created_at: u64,
+}
+
 /// Reducer to create a new note
 #[reducer]
 pub fn create_note(ctx: &ReducerContext, title: String, content: String) {
@@ -68,6 +77,31 @@ pub fn delete_all_notes(ctx: &ReducerContext) {
     // Delete each note
     for id in note_ids {
         ctx.db.note().id().delete(id);
+    }
+}
+
+/// Create a new folder (for testing String primary key)
+#[reducer]
+pub fn create_folder(ctx: &ReducerContext, path: String, name: String) {
+    ctx.db.folder().insert(Folder {
+        path,
+        name,
+        created_at: 0,
+    });
+}
+
+/// Delete a folder by path (String primary key)
+#[reducer]
+pub fn delete_folder(ctx: &ReducerContext, path: String) {
+    ctx.db.folder().path().delete(path);
+}
+
+/// Delete all folders in a single transaction
+#[reducer]
+pub fn delete_all_folders(ctx: &ReducerContext) {
+    let paths: Vec<String> = ctx.db.folder().iter().map(|f| f.path.clone()).collect();
+    for path in paths {
+        ctx.db.folder().path().delete(path);
     }
 }
 

@@ -17,6 +17,26 @@ class Reducers {
 
   Reducers(this._reducerCaller, this._reducerEmitter);
 
+  /// Call the create_folder reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> createFolder({
+    required String path,
+    required String name,
+  }) async {
+    final encoder = BsatnEncoder();
+    encoder.writeString(path);
+    encoder.writeString(name);
+
+    return await _reducerCaller.call('create_folder', encoder.toBytes());
+  }
+
   /// Call the create_note reducer
   ///
   /// Returns [TransactionResult] with execution metadata:
@@ -37,6 +57,21 @@ class Reducers {
     return await _reducerCaller.call('create_note', encoder.toBytes());
   }
 
+  /// Call the delete_all_folders reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> deleteAllFolders() async {
+    final encoder = BsatnEncoder();
+
+    return await _reducerCaller.call('delete_all_folders', encoder.toBytes());
+  }
+
   /// Call the delete_all_notes reducer
   ///
   /// Returns [TransactionResult] with execution metadata:
@@ -50,6 +85,24 @@ class Reducers {
     final encoder = BsatnEncoder();
 
     return await _reducerCaller.call('delete_all_notes', encoder.toBytes());
+  }
+
+  /// Call the delete_folder reducer
+  ///
+  /// Returns [TransactionResult] with execution metadata:
+  /// - `result.isSuccess` - Check if reducer committed
+  /// - `result.energyConsumed` - Energy used (null for lightweight responses)
+  /// - `result.executionDuration` - How long it took (null for lightweight responses)
+  ///
+  /// Throws [ReducerException] if the reducer fails or runs out of energy.
+  /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
+  Future<TransactionResult> deleteFolder({
+    required String path,
+  }) async {
+    final encoder = BsatnEncoder();
+    encoder.writeString(path);
+
+    return await _reducerCaller.call('delete_folder', encoder.toBytes());
   }
 
   /// Call the delete_note reducer
@@ -107,6 +160,21 @@ class Reducers {
     return await _reducerCaller.call('update_note', encoder.toBytes());
   }
 
+  StreamSubscription<void> onCreateFolder(void Function(EventContext ctx, String path, String name) callback) {
+    return _reducerEmitter.on('create_folder').listen((EventContext ctx) {
+      // Pattern match to extract ReducerEvent
+      final event = ctx.event;
+      if (event is! ReducerEvent) return;
+
+      // Type guard - ensures args is correct type
+      final args = event.reducerArgs;
+      if (args is! CreateFolderArgs) return;
+
+      // Extract fields from strongly-typed object - NO CASTING
+      callback(ctx, args.path, args.name);
+    });
+  }
+
   StreamSubscription<void> onCreateNote(void Function(EventContext ctx, String title, String content) callback) {
     return _reducerEmitter.on('create_note').listen((EventContext ctx) {
       // Pattern match to extract ReducerEvent
@@ -122,6 +190,21 @@ class Reducers {
     });
   }
 
+  StreamSubscription<void> onDeleteAllFolders(void Function(EventContext ctx) callback) {
+    return _reducerEmitter.on('delete_all_folders').listen((EventContext ctx) {
+      // Pattern match to extract ReducerEvent
+      final event = ctx.event;
+      if (event is! ReducerEvent) return;
+
+      // Type guard - ensures args is correct type
+      final args = event.reducerArgs;
+      if (args is! DeleteAllFoldersArgs) return;
+
+      // Extract fields from strongly-typed object - NO CASTING
+      callback(ctx);
+    });
+  }
+
   StreamSubscription<void> onDeleteAllNotes(void Function(EventContext ctx) callback) {
     return _reducerEmitter.on('delete_all_notes').listen((EventContext ctx) {
       // Pattern match to extract ReducerEvent
@@ -134,6 +217,21 @@ class Reducers {
 
       // Extract fields from strongly-typed object - NO CASTING
       callback(ctx);
+    });
+  }
+
+  StreamSubscription<void> onDeleteFolder(void Function(EventContext ctx, String path) callback) {
+    return _reducerEmitter.on('delete_folder').listen((EventContext ctx) {
+      // Pattern match to extract ReducerEvent
+      final event = ctx.event;
+      if (event is! ReducerEvent) return;
+
+      // Type guard - ensures args is correct type
+      final args = event.reducerArgs;
+      if (args is! DeleteFolderArgs) return;
+
+      // Extract fields from strongly-typed object - NO CASTING
+      callback(ctx, args.path);
     });
   }
 

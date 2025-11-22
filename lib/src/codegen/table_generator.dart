@@ -115,13 +115,27 @@ class TableGenerator {
     buf.writeln('  }');
     buf.writeln();
     buf.writeln('  @override');
-    buf.writeln('  int? getPrimaryKey($className row) {');
 
-    // Find primary key column (first element for now)
-    if (productType.elements.isNotEmpty) {
-      final firstField = productType.elements.first.name ?? 'unknown';
-      buf.writeln('    return row.$firstField;');
+    // Find the actual primary key column and its type
+    if (table.primaryKey.isNotEmpty && productType.elements.isNotEmpty) {
+      final pkIndex = table.primaryKey.first;
+      if (pkIndex < productType.elements.length) {
+        final pkElement = productType.elements[pkIndex];
+        final pkFieldName = pkElement.name ?? 'unknown';
+        final pkDartType = TypeMapper.toDartType(
+          pkElement.algebraicType,
+          typeSpace: schema.typeSpace,
+          typeDefs: schema.types,
+        );
+        // Use dynamic to support any PK type (int, String, etc.)
+        buf.writeln('  $pkDartType? getPrimaryKey($className row) {');
+        buf.writeln('    return row.$pkFieldName;');
+      } else {
+        buf.writeln('  dynamic getPrimaryKey($className row) {');
+        buf.writeln('    return null;');
+      }
     } else {
+      buf.writeln('  dynamic getPrimaryKey($className row) {');
       buf.writeln('    return null;');
     }
 

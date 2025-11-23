@@ -6,7 +6,7 @@ void main() {
   group('TransactionUpdate Message Handling', () {
     test('creates TransactionUpdateMessage with all required fields', () {
       // Setup: Create a TransactionUpdateMessage with all required fields
-      final reducerName = 'create_note';
+      const reducerName = 'create_note';
       final reducerArgs = Uint8List(0); // Empty args for simplicity
 
       final message = TransactionUpdateMessage(
@@ -93,7 +93,7 @@ void main() {
     test('EventContext wraps Event with client reference', () {
       final event = UnknownTransactionEvent();
       final context = EventContext(
-        client: null, // Can be null in tests
+        myConnectionId: null, // Can be null in tests
         event: event,
       );
 
@@ -113,7 +113,7 @@ void main() {
       );
 
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: event,
       );
 
@@ -131,12 +131,12 @@ void main() {
 
   group('Event Type Creation from TransactionUpdateMessage', () {
     test('ReducerEvent preserves all metadata fields', () {
-      final timestamp = 987654321;
+      const timestamp = 987654321;
       final status = Committed();
       final callerIdentity = Uint8List(32);
       final callerConnectionId = Uint8List.fromList([5, 6, 7, 8]);
-      final energyConsumed = 250;
-      final reducerName = 'update_note';
+      const energyConsumed = 250;
+      const reducerName = 'update_note';
       final reducerArgs = {'title': 'Updated Title'};
 
       final event = ReducerEvent(

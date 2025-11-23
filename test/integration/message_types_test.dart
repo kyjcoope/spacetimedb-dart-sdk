@@ -6,7 +6,6 @@ import '../generated/note.dart';
 import '../generated/reducer_args.dart';
 import '../helpers/integration_test_helper.dart';
 
-@Tags(['integration'])
 
 /// Comprehensive test for all SpacetimeDB server message types
 
@@ -29,7 +28,7 @@ void main() {
     subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
     await connection.connect();
-    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
+    await subManager.onIdentityToken.first.timeout(const Duration(seconds: 5));
   });
 
   tearDown(() async {
@@ -53,7 +52,7 @@ void main() {
       await newConnection.connect();
 
       // C. WAIT
-      final token = await tokenFuture.timeout(Duration(seconds: 2));
+      final token = await tokenFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(token.identity.length, equals(32),
@@ -76,7 +75,7 @@ void main() {
       subManager.subscribe(['SELECT * FROM note']);
 
       // C. WAIT
-      final initialSub = await initialSubFuture.timeout(Duration(seconds: 2));
+      final initialSub = await initialSubFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       // Note: tableUpdates can be empty if the table has no rows
@@ -113,7 +112,7 @@ void main() {
       });
 
       // C. WAIT
-      final txUpdate = await txUpdateFuture.timeout(Duration(seconds: 2));
+      final txUpdate = await txUpdateFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(txUpdate.timestamp, greaterThan(0),
@@ -137,7 +136,7 @@ void main() {
       subManager.oneOffQuery(messageId, 'SELECT * FROM note');
 
       // C. WAIT
-      final queryResponse = await queryResponseFuture.timeout(Duration(seconds: 2));
+      final queryResponse = await queryResponseFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(queryResponse.messageId, equals(messageId),
@@ -165,7 +164,7 @@ void main() {
       );
 
       // C. WAIT
-      final subscribeApplied = await subscribeAppliedFuture.timeout(Duration(seconds: 2));
+      final subscribeApplied = await subscribeAppliedFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(subscribeApplied.requestId, equals(requestId),
@@ -187,7 +186,7 @@ void main() {
         requestId: subscribeRequestId,
         queryId: queryId,
       );
-      await subManager.onSubscribeApplied.first.timeout(Duration(seconds: 2));
+      await subManager.onSubscribeApplied.first.timeout(const Duration(seconds: 2));
 
       // A. PREPARE LISTENER
       final unsubAppliedFuture = subManager.onUnsubscribeApplied.first;
@@ -196,7 +195,7 @@ void main() {
       subManager.unsubscribe(queryId, requestId: unsubscribeRequestId);
 
       // C. WAIT
-      final unsubApplied = await unsubAppliedFuture.timeout(Duration(seconds: 2));
+      final unsubApplied = await unsubAppliedFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(unsubApplied.requestId, equals(unsubscribeRequestId),
@@ -218,7 +217,7 @@ void main() {
       subManager.unsubscribe(queryId, requestId: requestId);
 
       // C. WAIT
-      final subError = await errorFuture.timeout(Duration(seconds: 2));
+      final subError = await errorFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(subError.requestId, equals(requestId),
@@ -249,7 +248,7 @@ void main() {
       subManager.callProcedure('add_numbers', encoder.toBytes(), requestId: requestId);
 
       // C. WAIT
-      final procedureResult = await procedureResultFuture.timeout(Duration(seconds: 2));
+      final procedureResult = await procedureResultFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(procedureResult.requestId, equals(requestId),
@@ -302,7 +301,7 @@ void main() {
       });
 
       // C. WAIT
-      final updateType = await updateCompleter.future.timeout(Duration(seconds: 2));
+      final updateType = await updateCompleter.future.timeout(const Duration(seconds: 2));
 
       // D. ASSERT - either type is valid
       expect(updateType, anyOf(['light', 'full']),
@@ -333,7 +332,7 @@ void main() {
       );
 
       // C. WAIT
-      final subscribeMultiApplied = await subscribeMultiFuture.timeout(Duration(seconds: 2));
+      final subscribeMultiApplied = await subscribeMultiFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(subscribeMultiApplied.requestId, equals(requestId),
@@ -357,7 +356,7 @@ void main() {
         requestId: subscribeRequestId,
         queryId: queryId,
       );
-      await subManager.onSubscribeMultiApplied.first.timeout(Duration(seconds: 2));
+      await subManager.onSubscribeMultiApplied.first.timeout(const Duration(seconds: 2));
 
       // A. PREPARE LISTENER
       final unsubMultiFuture = subManager.onUnsubscribeMultiApplied.first;
@@ -366,7 +365,7 @@ void main() {
       subManager.unsubscribeMulti(queryId, requestId: unsubscribeRequestId);
 
       // C. WAIT
-      final unsubscribeMultiApplied = await unsubMultiFuture.timeout(Duration(seconds: 2));
+      final unsubscribeMultiApplied = await unsubMultiFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(unsubscribeMultiApplied.requestId, equals(unsubscribeRequestId),

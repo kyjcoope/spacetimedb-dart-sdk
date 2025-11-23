@@ -1,3 +1,6 @@
+library;
+
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
@@ -6,7 +9,6 @@ import '../generated/folder.dart';
 import '../generated/reducer_args.dart';
 import '../helpers/integration_test_helper.dart';
 
-@Tags(['integration'])
 
 void main() {
   setUpAll(ensureTestEnvironment);
@@ -60,7 +62,7 @@ void main() {
     print('📁 TEST 1: Single folder with String primary key');
 
     final testPath = '/test/folder-${DateTime.now().millisecondsSinceEpoch}';
-    final testName = 'Test Folder';
+    const testName = 'Test Folder';
 
     // Set up insert listener
     final insertFuture = folderTable.insertStream.first;

@@ -34,7 +34,7 @@ void main() {
         reducerArgs: {},
       );
 
-      final context = EventContext(client: null, event: event);
+      final context = EventContext(myConnectionId: null, event: event);
 
       // Use expectLater with emits matcher
       final stream = emitter.on('test_reducer');
@@ -48,7 +48,7 @@ void main() {
     test('emit() does nothing if no listeners registered', () {
       // Should not throw or create controllers
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: UnknownTransactionEvent(),
       );
 
@@ -59,7 +59,7 @@ void main() {
 
     test('multiple listeners receive the same event', () async {
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -85,7 +85,7 @@ void main() {
 
     test('different reducers have independent streams', () async {
       final context1 = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -96,7 +96,7 @@ void main() {
       );
 
       final context2 = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 456,
           status: Committed(),
@@ -157,7 +157,7 @@ void main() {
 
     test('cancelled subscription stops receiving events', () async {
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -245,7 +245,7 @@ void main() {
 
       // Emit event
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -257,7 +257,7 @@ void main() {
 
       emitter.emit('test_reducer', context);
 
-      await completer.future.timeout(Duration(seconds: 2));
+      await completer.future.timeout(const Duration(seconds: 2));
 
       await subscription.cancel();
       emitter.dispose();
@@ -293,7 +293,7 @@ void main() {
       emitter.emit(
         'test_reducer',
         EventContext(
-          client: null,
+        myConnectionId: null,
           event: ReducerEvent(
             timestamp: 123,
             status: Committed(),
@@ -308,7 +308,7 @@ void main() {
       emitter.emit(
         'test_reducer',
         EventContext(
-          client: null,
+        myConnectionId: null,
           event: ReducerEvent(
             timestamp: 456,
             status: Failed('error'),
@@ -320,8 +320,8 @@ void main() {
       );
 
       await Future.wait([
-        successCompleter.future.timeout(Duration(seconds: 2)),
-        failureCompleter.future.timeout(Duration(seconds: 2)),
+        successCompleter.future.timeout(const Duration(seconds: 2)),
+        failureCompleter.future.timeout(const Duration(seconds: 2)),
       ]);
 
       await subscription.cancel();
@@ -359,7 +359,7 @@ void main() {
       emitter.emit(
         'test_reducer',
         EventContext(
-          client: null,
+        myConnectionId: null,
           event: ReducerEvent(
             timestamp: 123,
             status: Committed(),
@@ -375,7 +375,7 @@ void main() {
       emitter.emit(
         'test_reducer',
         EventContext(
-          client: null,
+        myConnectionId: null,
           event: ReducerEvent(
             timestamp: 456,
             status: Committed(),
@@ -388,8 +388,8 @@ void main() {
       );
 
       await Future.wait([
-        myTransactionCompleter.future.timeout(Duration(seconds: 2)),
-        otherTransactionCompleter.future.timeout(Duration(seconds: 2)),
+        myTransactionCompleter.future.timeout(const Duration(seconds: 2)),
+        otherTransactionCompleter.future.timeout(const Duration(seconds: 2)),
       ]);
 
       await subscription.cancel();

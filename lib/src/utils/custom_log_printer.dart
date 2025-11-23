@@ -50,7 +50,7 @@ class CustomLogPrinter extends LogPrinter {
         return '⚠️';
       case Level.error:
         return '❌';
-      case Level.wtf:
+      case Level.fatal:
         return '💥';
       default:
         return '📝';

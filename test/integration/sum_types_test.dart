@@ -1,4 +1,6 @@
-import 'dart:async';
+library;
+
+// ignore_for_file: avoid_print
 import 'dart:typed_data';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
@@ -8,7 +10,6 @@ import '../generated/note.dart';
 import '../generated/note_status.dart';
 import '../helpers/integration_test_helper.dart';
 
-@Tags(['integration'])
 
 /// Sum Types Integration Test
 ///
@@ -38,7 +39,7 @@ void main() {
     subManager.cache.registerDecoder<Note>('note', NoteDecoder());
 
     await connection.connect();
-    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
+    await subManager.onIdentityToken.first.timeout(const Duration(seconds: 5));
   });
 
   tearDown(() async {
@@ -91,7 +92,7 @@ void main() {
 
       // Test 4: Pattern matching exhaustiveness (compile-time check)
       // If a variant is added, this switch must fail to compile
-      final status = draft as NoteStatus;
+      const status = draft as NoteStatus;
       final typeName = switch (status) {
         NoteStatusDraft() => 'Draft',
         NoteStatusPublished() => 'Published',
@@ -154,14 +155,25 @@ void main() {
       // Subscribe to notes table
       subManager.subscribe(['SELECT * FROM note']);
       await subManager.onInitialSubscription.first
-          .timeout(Duration(seconds: 5));
+          .timeout(const Duration(seconds: 5));
 
       // Get the TYPED table (not dynamic!)
       final noteTable = subManager.cache.getTableByTypedName<Note>('note');
+
+      // Create a note if the table is empty
+      if (noteTable.count() == 0) {
+        final txFuture = subManager.onTransactionUpdate.first;
+        await subManager.reducers.callWith('create_note', (encoder) {
+          encoder.writeString('Sum Type Test');
+          encoder.writeString('Testing Ref field typing');
+        });
+        await txFuture.timeout(const Duration(seconds: 2));
+      }
+
       final notes = noteTable.iter().toList();
 
       expect(notes, isNotEmpty,
-          reason: 'Should have notes from init reducer');
+          reason: 'Should have notes after creation');
 
       final firstNote = notes.first;
 

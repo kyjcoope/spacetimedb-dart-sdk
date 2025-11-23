@@ -77,7 +77,7 @@ void main() {
         reducerArgs: {},
       );
 
-      final context = EventContext(client: null, event: event);
+      final context = EventContext(myConnectionId: null, event: event);
 
       // Verify we can create all event types
       final insertEvent = TableInsertEvent<String>(context, 'test');
@@ -98,7 +98,7 @@ void main() {
         reducerArgs: {},
       );
 
-      final context = EventContext(client: null, event: event);
+      final context = EventContext(myConnectionId: null, event: event);
       final insertEvent = TableInsertEvent<String>(context, 'test');
 
       // Test pattern matching
@@ -134,7 +134,7 @@ void main() {
         reducerArgs: {'key': 'value'},
       );
 
-      final context = EventContext(client: null, event: reducerEvent);
+      final context = EventContext(myConnectionId: null, event: reducerEvent);
       final event = TableInsertEvent<String>(context, 'test row');
 
       // Verify context is accessible
@@ -151,7 +151,7 @@ void main() {
 
     test('unified eventStream accepts all TableEvent subtypes', () {
       final context = EventContext(
-        client: null,
+        myConnectionId: null,
         event: UnknownTransactionEvent(),
       );
 
@@ -176,7 +176,7 @@ void main() {
         reducerArgs: {},
       );
 
-      final context = EventContext(client: null, event: event);
+      final context = EventContext(myConnectionId: null, event: event);
       final TableEvent<String> tableEvent = TableInsertEvent(context, 'test');
 
       // ✅ Good: Type guard with pattern matching

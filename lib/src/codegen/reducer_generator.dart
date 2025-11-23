@@ -176,7 +176,7 @@ class ReducerGenerator {
 
   /// Generate the strongly-typed args class for a reducer
   void _generateReducerArgsClass(StringBuffer buf, ReducerSchema reducer) {
-    final className = _toPascalCase(reducer.name) + 'Args';
+    final className = '${_toPascalCase(reducer.name)}Args';
 
     buf.writeln('/// Arguments for the ${reducer.name} reducer');
     buf.writeln('class $className {');

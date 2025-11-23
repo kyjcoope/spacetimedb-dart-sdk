@@ -5,7 +5,6 @@ import '../generated/note.dart';
 import '../generated/reducer_args.dart';
 import '../helpers/integration_test_helper.dart';
 
-@Tags(['integration'])
 
 /// Test calling reducers to create and update notes
 
@@ -29,7 +28,7 @@ void main() {
     subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
     await connection.connect();
-    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
+    await subManager.onIdentityToken.first.timeout(const Duration(seconds: 5));
 
     // Subscribe to notes table
     subManager.subscribe(['SELECT * FROM note']);
@@ -59,7 +58,7 @@ void main() {
       });
 
       // C. WAIT
-      final txUpdate = await txUpdateFuture.timeout(Duration(seconds: 2));
+      final txUpdate = await txUpdateFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(txUpdate.status, isA<Committed>(),
@@ -92,7 +91,7 @@ void main() {
         encoder.writeString('Original Title');
         encoder.writeString('Original Content');
       });
-      await createTxFuture.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(const Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;
@@ -117,7 +116,7 @@ void main() {
       });
 
       // C. WAIT
-      final txUpdate = await txUpdateFuture.timeout(Duration(seconds: 2));
+      final txUpdate = await txUpdateFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(txUpdate.status, isA<Committed>(),
@@ -146,7 +145,7 @@ void main() {
         encoder.writeString('To Delete');
         encoder.writeString('This will be deleted');
       });
-      await createTxFuture.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(const Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;
@@ -171,7 +170,7 @@ void main() {
       });
 
       // C. WAIT
-      final txUpdate = await txUpdateFuture.timeout(Duration(seconds: 2));
+      final txUpdate = await txUpdateFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(txUpdate.status, isA<Committed>(),
@@ -211,7 +210,7 @@ void main() {
       });
 
       // C. WAIT
-      final insertedNote = await insertCompleter.future.timeout(Duration(seconds: 2));
+      final insertedNote = await insertCompleter.future.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(insertedNote.title, equals('Stream Test'),
@@ -230,7 +229,7 @@ void main() {
       // 1. Setup trap for INSERT (to capture the ID securely)
       final insertFuture = noteTable.insertStream.firstWhere(
         (note) => note.title == uniqueTitle,
-      ).timeout(Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 2));
 
       // 2. Create note
       subManager.reducers.callWith('create_note', (encoder) {
@@ -245,7 +244,7 @@ void main() {
       // 4. Setup trap for UPDATE
       final updateFuture = noteTable.updateStream.firstWhere(
         (e) => e.newRow.id == correctId,
-      ).timeout(Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 2));
 
       // 5. Update using the CONFIRMED ID
       subManager.reducers.callWith('update_note', (encoder) {
@@ -276,7 +275,7 @@ void main() {
         encoder.writeString('Delete Stream Test');
         encoder.writeString('Will be deleted');
       });
-      await createTxFuture.timeout(Duration(seconds: 2));
+      await createTxFuture.timeout(const Duration(seconds: 2));
 
       // Find the note ID
       int? noteId;
@@ -302,7 +301,7 @@ void main() {
       });
 
       // C. WAIT
-      final deletedNote = await deleteCompleter.future.timeout(Duration(seconds: 2));
+      final deletedNote = await deleteCompleter.future.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(deletedNote.id, equals(noteId),

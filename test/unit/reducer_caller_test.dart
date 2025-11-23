@@ -45,7 +45,7 @@ void main() {
         // 4. Verify Future is STILL pending (no false positive)
         bool completed = false;
         unawaited(future.then((_) => completed = true));
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(const Duration(milliseconds: 50));
         expect(completed, isFalse,
             reason: 'Should ignore mismatched request_id');
 
@@ -105,7 +105,7 @@ void main() {
         // Check Slow is still waiting
         bool slowDone = false;
         unawaited(futureSlow.then((_) => slowDone = true));
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future.delayed(const Duration(milliseconds: 10));
         expect(slowDone, isFalse, reason: 'Slow should still be pending');
 
         // 4. Complete SLOW one later
@@ -217,7 +217,7 @@ void main() {
         final future = reducerCaller.call(
           'timeout_test',
           Uint8List(0),
-          timeout: Duration(milliseconds: 100),
+          timeout: const Duration(milliseconds: 100),
         );
 
         final requestId = mockConnection.getLastSentRequestId();
@@ -238,14 +238,14 @@ void main() {
             returnsNormally);
 
         // Give time for any potential async errors
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future.delayed(const Duration(milliseconds: 50));
       });
 
       test('Timeout includes reducer name in error message', () async {
         final future = reducerCaller.call(
           'specific_reducer_name',
           Uint8List(0),
-          timeout: Duration(milliseconds: 50),
+          timeout: const Duration(milliseconds: 50),
         );
 
         try {
@@ -262,7 +262,7 @@ void main() {
         final future = reducerCaller.call(
           'custom_timeout',
           Uint8List(0),
-          timeout: Duration(seconds: 999),
+          timeout: const Duration(seconds: 999),
         );
 
         final requestId = mockConnection.getLastSentRequestId();
@@ -360,13 +360,13 @@ void main() {
         final future = reducerCaller.call(
           'race_test',
           Uint8List(0),
-          timeout: Duration(milliseconds: 100),
+          timeout: const Duration(milliseconds: 100),
         );
 
         final requestId = mockConnection.getLastSentRequestId();
 
         // Wait until just before timeout
-        await Future.delayed(Duration(milliseconds: 95));
+        await Future.delayed(const Duration(milliseconds: 95));
 
         // Fire response at almost the same moment as timeout
         final response = _createTransactionUpdate(

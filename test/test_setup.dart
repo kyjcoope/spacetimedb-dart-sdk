@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 
 /// Global test setup that runs once before all tests
@@ -13,7 +14,7 @@ Future<void> setupTestEnvironment() async {
 
     // If setup was done less than 5 minutes ago, skip
     if (DateTime.now().difference(setupTime).inMinutes < 5) {
-      print('✅ Test environment already set up (${setupTime})');
+      print('✅ Test environment already set up ($setupTime)');
       return;
     }
   }
@@ -35,7 +36,7 @@ Future<void> setupTestEnvironment() async {
   if (statusCheck.exitCode != 0) {
     print('Starting SpacetimeDB server...');
     Process.start('spacetime', ['start'], mode: ProcessStartMode.detached);
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 3));
   }
 
   // Build and publish test module

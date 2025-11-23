@@ -264,7 +264,7 @@ void main() {
 
     test('Unicode string with emojis', () {
       final encoder = BsatnEncoder();
-      final emoji = '👾🎮🚀💻🔥';
+      const emoji = '👾🎮🚀💻🔥';
       encoder.writeString(emoji);
 
       final decoder = BsatnDecoder(encoder.toBytes());

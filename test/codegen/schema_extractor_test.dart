@@ -1,9 +1,9 @@
+// ignore_for_file: avoid_print
 import 'dart:convert';
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
 import 'test_helpers.dart';
-import 'package:spacetimedb_dart_sdk/src/codegen/models.dart';
 
 void main() {
   group('CLI Output Parsing', () {
@@ -16,7 +16,7 @@ void main() {
     }
 
     test('filters out single WARNING line before JSON', () {
-      final rawOutput = '''WARNING: Server version mismatch
+      const rawOutput = '''WARNING: Server version mismatch
 {"entities":[],"reducers":[]}''';
 
       final filtered = filterWarnings(rawOutput);
@@ -28,7 +28,7 @@ void main() {
     });
 
     test('filters out multiple WARNING lines', () {
-      final rawOutput = '''WARNING: First warning
+      const rawOutput = '''WARNING: First warning
 WARNING: Second warning
 WARNING: Third warning
 {"entities":[],"reducers":[]}''';
@@ -40,7 +40,7 @@ WARNING: Third warning
     });
 
     test('handles WARNING lines interspersed with valid JSON', () {
-      final rawOutput = '''WARNING: Before JSON
+      const rawOutput = '''WARNING: Before JSON
 {
 WARNING: This would break JSON if not filtered
   "entities": [],
@@ -55,7 +55,7 @@ WARNING: This would break JSON if not filtered
     });
 
     test('preserves valid JSON when no warnings present', () {
-      final rawOutput = '{"entities":[],"reducers":[]}';
+      const rawOutput = '{"entities":[],"reducers":[]}';
 
       final filtered = filterWarnings(rawOutput);
       final json = jsonDecode(filtered);
@@ -64,13 +64,13 @@ WARNING: This would break JSON if not filtered
     });
 
     test('handles empty output', () {
-      final rawOutput = '';
+      const rawOutput = '';
       final filtered = filterWarnings(rawOutput);
       expect(filtered, isEmpty);
     });
 
     test('handles only warnings (no JSON)', () {
-      final rawOutput = '''WARNING: First
+      const rawOutput = '''WARNING: First
 WARNING: Second''';
 
       final filtered = filterWarnings(rawOutput);
@@ -79,7 +79,7 @@ WARNING: Second''';
     });
 
     test('case sensitive - does not filter "warning:" lowercase', () {
-      final rawOutput = '''warning: this is lowercase
+      const rawOutput = '''warning: this is lowercase
 WARNING: this is uppercase
 {"test": true}''';
 
@@ -90,7 +90,7 @@ WARNING: this is uppercase
     });
 
     test('filters "WARNING:" prefix only at line start', () {
-      final rawOutput = '''Some text WARNING: not at start
+      const rawOutput = '''Some text WARNING: not at start
 WARNING: at start
 {"test": true}''';
 

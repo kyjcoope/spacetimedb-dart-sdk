@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
@@ -32,7 +33,7 @@ void main() {
     test('Generated client auto-registers tables and waits for initial data', () async {
       // Skip if local server not running
       try {
-        final socket = await Socket.connect('localhost', 3000, timeout: Duration(seconds: 2));
+        final socket = await Socket.connect('localhost', 3000, timeout: const Duration(seconds: 2));
         await socket.close();
       } catch (e) {
         print('⚠️  Skipping test - SpacetimeDB local server not running');
@@ -133,7 +134,7 @@ void main() {
     test('Generated code structure is complete', () async {
       // Skip if local server not running
       try {
-        final socket = await Socket.connect('localhost', 3000, timeout: Duration(seconds: 2));
+        final socket = await Socket.connect('localhost', 3000, timeout: const Duration(seconds: 2));
         await socket.close();
       } catch (e) {
         print('⚠️  Skipping test - SpacetimeDB local server not running');

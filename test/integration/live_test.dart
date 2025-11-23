@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'dart:math';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
@@ -109,7 +110,7 @@ void main() async {
   // 5. Wait for identity token
   print('⏳ Waiting for identity token...');
   await identityReceived.future.timeout(
-    Duration(seconds: 5),
+    const Duration(seconds: 5),
     onTimeout: () {
       print('❌ Timeout waiting for identity token');
       throw TimeoutException('No identity token received');
@@ -122,12 +123,12 @@ void main() async {
   print('✅ Subscription sent!\n');
 
   // Small delay to ensure message is fully sent
-  await Future.delayed(Duration(milliseconds: 100));
+  await Future.delayed(const Duration(milliseconds: 100));
 
   // 7. Wait for initial data
   print('⏳ Waiting for initial data...');
   await initialDataReceived.future.timeout(
-    Duration(seconds: 3),
+    const Duration(seconds: 3),
     onTimeout: () {
       print('❌ Timeout waiting for initial data');
       print(
@@ -146,7 +147,7 @@ void main() async {
   print('\n🎉 Integration test complete!');
 
   // Cleanup
-  await Future.delayed(Duration(seconds: 1));
+  await Future.delayed(const Duration(seconds: 1));
   subscriptionManager.dispose();
   await connection.disconnect();
 }

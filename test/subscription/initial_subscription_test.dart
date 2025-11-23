@@ -27,7 +27,7 @@ void main() {
     test('applyInitialData accepts EventContext parameter', () {
       // Create SubscribeAppliedEvent context
       final event = SubscribeAppliedEvent();
-      final context = EventContext(client: null, event: event);
+      final context = EventContext(myConnectionId: null, event: event);
 
       // Create mock insert data
       final encoder = BsatnEncoder();
@@ -53,7 +53,7 @@ void main() {
 
       // Create SubscribeAppliedEvent context
       final subscribeEvent = SubscribeAppliedEvent();
-      final context = EventContext(client: null, event: subscribeEvent);
+      final context = EventContext(myConnectionId: null, event: subscribeEvent);
 
       // Apply initial data
       final encoder = BsatnEncoder();
@@ -62,7 +62,7 @@ void main() {
       table.applyInitialData(inserts, context);
 
       // Wait for event
-      final capturedContext = await completer.future.timeout(Duration(seconds: 2));
+      final capturedContext = await completer.future.timeout(const Duration(seconds: 2));
 
       // Verify event was emitted
       expect(capturedContext, isNotNull);
@@ -90,7 +90,7 @@ void main() {
 
       // Simulate initial subscription data
       final subscribeContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: SubscribeAppliedEvent(),
       );
 
@@ -101,7 +101,7 @@ void main() {
 
       // Simulate reducer update
       final reducerContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -118,8 +118,8 @@ void main() {
 
       // Wait for both events
       await Future.wait([
-        initialCompleter.future.timeout(Duration(seconds: 2)),
-        reducerCompleter.future.timeout(Duration(seconds: 2)),
+        initialCompleter.future.timeout(const Duration(seconds: 2)),
+        reducerCompleter.future.timeout(const Duration(seconds: 2)),
       ]);
 
       await subscription.cancel();
@@ -138,7 +138,7 @@ void main() {
 
       // Create initial data with multiple rows
       final subscribeContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: SubscribeAppliedEvent(),
       );
 
@@ -165,7 +165,7 @@ void main() {
       table.applyInitialData(inserts, subscribeContext);
 
       // Wait for all 3 events
-      final events = await completer.future.timeout(Duration(seconds: 2));
+      final events = await completer.future.timeout(const Duration(seconds: 2));
 
       // All events should be SubscribeAppliedEvent
       expect(events.length, equals(3));
@@ -186,7 +186,7 @@ void main() {
       });
 
       final subscribeContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: SubscribeAppliedEvent(),
       );
 
@@ -196,7 +196,7 @@ void main() {
       table.applyInitialData(inserts, subscribeContext);
 
       // Wait for event
-      final capturedEvent = await completer.future.timeout(Duration(seconds: 2));
+      final capturedEvent = await completer.future.timeout(const Duration(seconds: 2));
 
       expect(capturedEvent, isA<TableInsertEvent<String>>());
       expect(capturedEvent.context.event, isA<SubscribeAppliedEvent>());
@@ -225,7 +225,7 @@ void main() {
 
       // Initial data
       final subscribeContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: SubscribeAppliedEvent(),
       );
       final encoder1 = BsatnEncoder();
@@ -235,7 +235,7 @@ void main() {
 
       // Reducer update
       final reducerContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -251,8 +251,8 @@ void main() {
 
       // Wait for both events
       await Future.wait([
-        initialCompleter.future.timeout(Duration(seconds: 2)),
-        realtimeCompleter.future.timeout(Duration(seconds: 2)),
+        initialCompleter.future.timeout(const Duration(seconds: 2)),
+        realtimeCompleter.future.timeout(const Duration(seconds: 2)),
       ]);
 
       await subscription.cancel();
@@ -281,7 +281,7 @@ void main() {
       });
 
       // Send both types
-      final subscribeContext = EventContext(client: null, event: SubscribeAppliedEvent());
+      final subscribeContext = EventContext(myConnectionId: null, event: SubscribeAppliedEvent());
       final encoder1 = BsatnEncoder();
       encoder1.writeString('initial');
       table.applyInitialData(
@@ -290,7 +290,7 @@ void main() {
       );
 
       final reducerContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -308,7 +308,7 @@ void main() {
       );
 
       // Wait for filtered event
-      await completer.future.timeout(Duration(seconds: 2));
+      await completer.future.timeout(const Duration(seconds: 2));
 
       // Only initial data should be counted
       expect(initialDataCount, equals(1));
@@ -337,7 +337,7 @@ void main() {
       });
 
       // Send both types
-      final subscribeContext = EventContext(client: null, event: SubscribeAppliedEvent());
+      final subscribeContext = EventContext(myConnectionId: null, event: SubscribeAppliedEvent());
       final encoder1 = BsatnEncoder();
       encoder1.writeString('initial');
       table.applyInitialData(
@@ -346,7 +346,7 @@ void main() {
       );
 
       final reducerContext = EventContext(
-        client: null,
+        myConnectionId: null,
         event: ReducerEvent(
           timestamp: 123,
           status: Committed(),
@@ -364,7 +364,7 @@ void main() {
       );
 
       // Wait for filtered event
-      await completer.future.timeout(Duration(seconds: 2));
+      await completer.future.timeout(const Duration(seconds: 2));
 
       // Only realtime updates should be counted
       expect(realtimeCount, equals(1));

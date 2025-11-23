@@ -55,7 +55,7 @@ void main() {
   group('ConnectionConfig Presets', () {
     test('Presets have correct values', () {
       expect(ConnectionConfig.mobile.maxReconnectAttempts, greaterThan(10));
-      expect(ConnectionConfig.stable.pingInterval, greaterThan(Duration(seconds: 30)));
+      expect(ConnectionConfig.stable.pingInterval, greaterThan(const Duration(seconds: 30)));
       expect(ConnectionConfig.development.autoReconnect, false);
     });
   });
@@ -69,7 +69,7 @@ void main() {
 
       // Subscribe to quality stream
       final qualityFuture = connection.connectionQuality.first
-          .timeout(Duration(milliseconds: 100));
+          .timeout(const Duration(milliseconds: 100));
 
       // Should receive initial quality value immediately (disconnected state)
       final quality = await qualityFuture;

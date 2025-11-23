@@ -1,6 +1,7 @@
 /// SpacetimeDB Schema Models
 ///
 /// Organized schema model classes for parsing SpacetimeDB schema JSON.
+library;
 
 // Core schema
 export 'models/database_schema.dart';

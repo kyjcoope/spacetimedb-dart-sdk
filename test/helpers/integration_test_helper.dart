@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:test/test.dart';
 import '../test_setup.dart';
 
 /// Helper for integration tests that require SpacetimeDB and generated code

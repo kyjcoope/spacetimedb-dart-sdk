@@ -1,4 +1,5 @@
 /// Table schema models for SpacetimeDB
+library;
 
 class TableSchema {
   final String name;

@@ -135,11 +135,4 @@ class TypeMapper {
     if (input.isEmpty) return input;
     return input[0].toUpperCase() + input.substring(1);
   }
-
-  static String _toSnakeCase(String input) {
-    return input
-        .replaceAllMapped(
-            RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}')
-        .replaceFirst(RegExp(r'^_'), '');
-  }
 }

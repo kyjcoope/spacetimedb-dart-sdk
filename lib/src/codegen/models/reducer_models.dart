@@ -1,4 +1,5 @@
 /// Reducer schema models for SpacetimeDB
+library;
 
 import 'type_models.dart';
 

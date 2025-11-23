@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 
 /// Setup SpacetimeDB test environment programmatically
@@ -18,7 +19,7 @@ Future<void> main() async {
   if (statusCheck.exitCode != 0) {
     print('⚠️  SpacetimeDB not running, starting server...');
     await Process.start('spacetime', ['start']);
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 3));
     print('✅ SpacetimeDB started');
   } else {
     print('✅ SpacetimeDB already running');

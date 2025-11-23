@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 import 'package:args/args.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
@@ -38,7 +39,7 @@ void main(List<String> arguments) async {
     final hasBinary = binPath != null;
 
     if (!hasNetwork && !hasProject && !hasBinary) {
-      throw FormatException(
+      throw const FormatException(
         'Must specify either:\n'
         '  - Network: --server and --database\n'
         '  - Project: --project-path\n'
@@ -47,7 +48,7 @@ void main(List<String> arguments) async {
     }
 
     if ([hasNetwork, hasProject, hasBinary].where((x) => x).length > 1) {
-      throw FormatException(
+      throw const FormatException(
         'Can only specify one schema source at a time',
       );
     }
@@ -58,12 +59,12 @@ void main(List<String> arguments) async {
         print('Fetching schema for database: $database');
         print('Using server: $server');
         return SchemaExtractor.fromNetwork(
-          database: database!,
+          database: database,
           server: server,
         );
       } else if (hasProject) {
         print('Extracting schema from project: $projectPath');
-        return SchemaExtractor.fromProject(projectPath!);
+        return SchemaExtractor.fromProject(projectPath);
       } else {
         print('Extracting schema from WASM: $binPath');
         return SchemaExtractor.fromWasm(binPath!);

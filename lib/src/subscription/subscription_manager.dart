@@ -68,6 +68,7 @@ class SubscriptionManager {
   // Identity and connection info
   Identity? _identity;
   String? _address;
+  Uint8List? _connectionId;
 
   // Track table names from pending subscriptions
   // Used to activate empty tables that don't appear in InitialSubscription
@@ -156,6 +157,7 @@ class SubscriptionManager {
       case IdentityTokenMessage():
         // Store identity and address for public access
         _identity = Identity(message.identity);
+        _connectionId = message.connectionId;
         _address = message.connectionId
             .map((b) => b.toRadixString(16).padLeft(2, '0'))
             .join();
@@ -212,7 +214,7 @@ class SubscriptionManager {
     // Phase 2: Create EventContext with SubscribeAppliedEvent
     final event = SubscribeAppliedEvent();
     final context = EventContext(
-      client: null, // Will be set properly by generated client code
+      myConnectionId: _connectionId,
       event: event,
     );
 
@@ -275,10 +277,8 @@ class SubscriptionManager {
     }
 
     // 3. Create EventContext
-    // Note: Client reference will be wired up properly in Phase 5 (code generation)
-    // For now, we use a placeholder that will be replaced by generated code
     final context = EventContext(
-      client: null, // Will be set properly by generated client code
+      myConnectionId: _connectionId,
       event: event,
     );
 
@@ -315,7 +315,7 @@ class SubscriptionManager {
     // Light messages don't include reducer info, so create UnknownTransactionEvent
     final event = UnknownTransactionEvent();
     final context = EventContext(
-      client: null, // Will be set properly by generated client code
+      myConnectionId: _connectionId,
       event: event,
     );
 

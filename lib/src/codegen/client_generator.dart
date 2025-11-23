@@ -32,7 +32,7 @@ class ClientGenerator {
     buf.writeln();
 
     // Client class name (always SpacetimeDbClient for consistency)
-    final clientName = 'SpacetimeDbClient';
+    const clientName = 'SpacetimeDbClient';
 
     buf.writeln('class $clientName {');
     buf.writeln('  final SpacetimeDbConnection connection;');
@@ -209,13 +209,9 @@ class ClientGenerator {
     buf.writeln('    await connection.connect();');
     buf.writeln();
     buf.writeln('    if (initialSubscriptions != null && initialSubscriptions.isNotEmpty) {');
-    buf.writeln('      try {');
-    buf.writeln('        // Wait for initial subscription data to load with timeout');
-    buf.writeln('        await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);');
-    buf.writeln('      } on TimeoutException {');
-    buf.writeln('        // Log warning and continue - client is still usable with partial data');
-    buf.writeln(r"        print('Warning: Initial subscriptions timed out after ${subscriptionTimeout.inSeconds}s. Data may be incomplete.');");
-    buf.writeln('      }');
+    buf.writeln('      // Wait for initial subscription data to load with timeout');
+    buf.writeln('      // Throws TimeoutException if subscriptions take too long - caller can handle this');
+    buf.writeln('      await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);');
     buf.writeln('    }');
     buf.writeln();
     buf.writeln('    return client;');

@@ -136,13 +136,9 @@ class SpacetimeDbClient {
     await connection.connect();
 
     if (initialSubscriptions != null && initialSubscriptions.isNotEmpty) {
-      try {
-        // Wait for initial subscription data to load with timeout
-        await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);
-      } on TimeoutException {
-        // Log warning and continue - client is still usable with partial data
-        print('Warning: Initial subscriptions timed out after ${subscriptionTimeout.inSeconds}s. Data may be incomplete.');
-      }
+      // Wait for initial subscription data to load with timeout
+      // Throws TimeoutException if subscriptions take too long - caller can handle this
+      await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);
     }
 
     return client;

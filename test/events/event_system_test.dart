@@ -2,20 +2,6 @@ import 'dart:typed_data';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
-// Mock client for testing
-class MockClient {
-  final MockConnection connection;
-
-  MockClient({Uint8List? connectionId})
-      : connection = MockConnection(connectionId: connectionId);
-}
-
-class MockConnection {
-  final Uint8List? connectionId;
-
-  MockConnection({this.connectionId});
-}
-
 void main() {
   group('Event sealed class', () {
     test('ReducerEvent can be created', () {
@@ -106,26 +92,24 @@ void main() {
   });
 
   group('EventContext', () {
-    test('creates with client and event', () {
-      final client = MockClient();
+    test('creates with myConnectionId and event', () {
+      final connectionId = Uint8List.fromList([1, 2, 3, 4]);
       final event = UnknownTransactionEvent();
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: connectionId, event: event);
 
-      expect(ctx.client, equals(client));
       expect(ctx.event, equals(event));
     });
 
     test('isMyTransaction returns false for non-ReducerEvent', () {
-      final client = MockClient();
+      final connectionId = Uint8List.fromList([1, 2, 3, 4]);
       final event = SubscribeAppliedEvent();
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: connectionId, event: event);
 
       expect(ctx.isMyTransaction, isFalse);
     });
 
     test('isMyTransaction returns true for matching connection IDs', () {
       final myConnectionId = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]);
-      final client = MockClient(connectionId: myConnectionId);
 
       final event = ReducerEvent(
         timestamp: 123,
@@ -137,14 +121,13 @@ void main() {
         reducerArgs: {},
       );
 
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: myConnectionId, event: event);
       expect(ctx.isMyTransaction, isTrue);
     });
 
     test('isMyTransaction returns false for different connection IDs', () {
       final myConnectionId = Uint8List.fromList([1, 2, 3, 4]);
       final otherConnectionId = Uint8List.fromList([5, 6, 7, 8]);
-      final client = MockClient(connectionId: myConnectionId);
 
       final event = ReducerEvent(
         timestamp: 123,
@@ -156,13 +139,11 @@ void main() {
         reducerArgs: {},
       );
 
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: myConnectionId, event: event);
       expect(ctx.isMyTransaction, isFalse);
     });
 
-    test('isMyTransaction returns false when client connectionId is null', () {
-      final client = MockClient(connectionId: null);
-
+    test('isMyTransaction returns false when myConnectionId is null', () {
       final event = ReducerEvent(
         timestamp: 123,
         status: Committed(),
@@ -173,13 +154,12 @@ void main() {
         reducerArgs: {},
       );
 
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: null, event: event);
       expect(ctx.isMyTransaction, isFalse);
     });
 
     test('isMyTransaction returns false when caller connectionId is null', () {
       final myConnectionId = Uint8List.fromList([1, 2, 3, 4]);
-      final client = MockClient(connectionId: myConnectionId);
 
       final event = ReducerEvent(
         timestamp: 123,
@@ -191,14 +171,13 @@ void main() {
         reducerArgs: {},
       );
 
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: myConnectionId, event: event);
       expect(ctx.isMyTransaction, isFalse);
     });
 
     test('byte comparison works correctly for different length arrays', () {
       final myConnectionId = Uint8List.fromList([1, 2, 3]);
       final otherConnectionId = Uint8List.fromList([1, 2, 3, 4]);
-      final client = MockClient(connectionId: myConnectionId);
 
       final event = ReducerEvent(
         timestamp: 123,
@@ -210,20 +189,18 @@ void main() {
         reducerArgs: {},
       );
 
-      final ctx = EventContext(client: client, event: event);
+      final ctx = EventContext(myConnectionId: myConnectionId, event: event);
       // Should return false because lengths don't match
       expect(ctx.isMyTransaction, isFalse);
     });
   });
 
   group('TableEvent sealed class', () {
-    late MockClient mockClient;
     late EventContext mockContext;
 
     setUp(() {
-      mockClient = MockClient();
       final event = UnknownTransactionEvent();
-      mockContext = EventContext(client: mockClient, event: event);
+      mockContext = EventContext(myConnectionId: null, event: event);
     });
 
     test('TableInsertEvent can be created', () {

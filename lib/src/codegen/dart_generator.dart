@@ -3,7 +3,11 @@ import 'package:spacetimedb_dart_sdk/src/codegen/reducer_generator.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/models.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/table_generator.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/generators/sum_type_generator.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
+import 'package:logger/logger.dart';
 import 'dart:io';
+
+final _logger = Logger(printer: CustomLogPrinter());
 
 class DartGenerator {
   final DatabaseSchema schema;
@@ -74,7 +78,7 @@ class DartGenerator {
     for (final file in files) {
       final path = '${dir.path}/${file.filename}';
       await File(path).writeAsString(file.content);
-      print('  ✓ Generated $path');
+      _logger.i('Generated $path');
     }
   }
 }

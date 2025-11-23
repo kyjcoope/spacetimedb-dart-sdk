@@ -1,4 +1,5 @@
 /// Type system models for SpacetimeDB schema
+library;
 
 class TypeSpace {
   final List<AlgebraicType> types;

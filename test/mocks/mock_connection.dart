@@ -171,12 +171,10 @@ class MockConnection implements SpacetimeDbConnection {
   bool get ssl => false;
 
   @override
-  ConnectionConfig get config => ConnectionConfig();
+  ConnectionConfig get config => const ConnectionConfig();
 
-  @override
   Identity? get identity => null; // Null for tests unless testing identity filtering
 
-  @override
   String? get address => null; // Null for tests unless testing address filtering
 
   @override

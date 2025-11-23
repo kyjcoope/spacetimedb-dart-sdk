@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:io';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/schema_extractor.dart';
@@ -37,7 +38,7 @@ void main() {
 
       // 3. Create a "User App" script inside the temp dir
       // This script imports the GENERATED files, not your mocks.
-      final userAppScript = """
+      const userAppScript = """
 import 'dart:io';
 import 'dart:async';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
@@ -199,6 +200,6 @@ dependencies:
         print(runResult.stderr);
         fail('Generated client execution failed.');
       }
-    }, timeout: Timeout(Duration(minutes: 2))); // Give time for pub get
+    }, timeout: const Timeout(Duration(minutes: 2))); // Give time for pub get
   });
 }

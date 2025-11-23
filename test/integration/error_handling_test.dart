@@ -6,7 +6,6 @@ import '../generated/note.dart';
 import '../generated/reducer_args.dart';
 import '../helpers/integration_test_helper.dart';
 
-@Tags(['integration'])
 
 /// Error handling and failure mode tests for SpacetimeDB Dart SDK
 
@@ -29,7 +28,7 @@ void main() {
     subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
     await connection.connect();
-    await subManager.onIdentityToken.first.timeout(Duration(seconds: 5));
+    await subManager.onIdentityToken.first.timeout(const Duration(seconds: 5));
   });
 
   tearDown(() async {
@@ -53,7 +52,7 @@ void main() {
       );
 
       // C. WAIT
-      final result = await resultFuture.timeout(Duration(seconds: 2));
+      final result = await resultFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(result.requestId, equals(requestId),
@@ -87,7 +86,7 @@ void main() {
       );
 
       // C. WAIT
-      final error = await errorFuture.timeout(Duration(seconds: 2));
+      final error = await errorFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(error.requestId, equals(requestId),
@@ -119,7 +118,7 @@ void main() {
       subManager.unsubscribe(queryId, requestId: requestId);
 
       // C. WAIT
-      final error = await errorFuture.timeout(Duration(seconds: 2));
+      final error = await errorFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(error.requestId, equals(requestId),
@@ -146,7 +145,7 @@ void main() {
       // B. ACTION - send invalid args (0 arguments instead of 2 strings)
       final future = subManager.reducers.callWith('create_note', (encoder) {
         // Send nothing - wrong number of arguments
-      }, timeout: Duration(milliseconds: 200));
+      }, timeout: const Duration(milliseconds: 200));
 
       // C. EXPECT TIMEOUT
       // Server will not respond, so client must time out
@@ -181,7 +180,7 @@ void main() {
       );
 
       // C. WAIT
-      final result = await resultFuture.timeout(Duration(seconds: 2));
+      final result = await resultFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(result.requestId, equals(requestId),
@@ -208,7 +207,7 @@ void main() {
       );
 
       // C. WAIT
-      final result = await resultFuture.timeout(Duration(seconds: 2));
+      final result = await resultFuture.timeout(const Duration(seconds: 2));
 
       // D. ASSERT
       expect(result.requestId, equals(requestId),

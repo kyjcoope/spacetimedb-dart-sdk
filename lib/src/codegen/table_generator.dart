@@ -45,7 +45,7 @@ class TableGenerator {
 
     // Fields
     for (final element in productType.elements) {
-      final fieldName = element.name ?? 'unknown';
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
       final dartType = TypeMapper.toDartType(
         element.algebraicType,
         typeSpace: schema.typeSpace,
@@ -58,7 +58,7 @@ class TableGenerator {
     // Constructor
     buf.writeln('  $className({');
     for (final element in productType.elements) {
-      final fieldName = element.name ?? 'unknown';
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
       buf.writeln('    required this.$fieldName,');
     }
     buf.writeln('  });');
@@ -67,7 +67,7 @@ class TableGenerator {
     // encodeBsatn method
     buf.writeln('  void encodeBsatn(BsatnEncoder encoder) {');
     for (final element in productType.elements) {
-      final fieldName = element.name ?? 'unknown';
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
 
       if (TypeMapper.isRefType(element.algebraicType)) {
         // For Ref types, call the type's encode method
@@ -84,7 +84,7 @@ class TableGenerator {
     buf.writeln('  static $className decodeBsatn(BsatnDecoder decoder) {');
     buf.writeln('    return $className(');
     for (final element in productType.elements) {
-      final fieldName = element.name ?? 'unknown';
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
 
       if (TypeMapper.isRefType(element.algebraicType)) {
         // For Ref types, call the type's decode factory
@@ -121,7 +121,7 @@ class TableGenerator {
       final pkIndex = table.primaryKey.first;
       if (pkIndex < productType.elements.length) {
         final pkElement = productType.elements[pkIndex];
-        final pkFieldName = pkElement.name ?? 'unknown';
+        final pkFieldName = _toCamelCase(pkElement.name ?? 'unknown');
         final pkDartType = TypeMapper.toDartType(
           pkElement.algebraicType,
           typeSpace: schema.typeSpace,
@@ -156,5 +156,18 @@ class TableGenerator {
         .replaceAllMapped(
             RegExp(r'[A-Z]'), (match) => '_${match.group(0)!.toLowerCase()}')
         .replaceFirst(RegExp(r'^_'), '');
+  }
+
+  String _toCamelCase(String input) {
+    final parts = input.split('_');
+    if (parts.isEmpty) return input;
+
+    final first = parts.first.toLowerCase();
+    final rest = parts.skip(1).map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join('');
+
+    return first + rest;
   }
 }

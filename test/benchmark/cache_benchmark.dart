@@ -1,7 +1,8 @@
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'package:spacetimedb_dart_sdk/src/connection/spacetimedb_connection.dart';
 import 'package:spacetimedb_dart_sdk/src/subscription/subscription_manager.dart';
-import '../integration/note_decoder.dart';
+import '../generated/note.dart';
 
 void main() async {
   print('⚡ Cache Performance Benchmark\n');
@@ -19,7 +20,7 @@ void main() async {
   print('📡 Connecting...');
   await connection.connect();
   subscriptionManager.subscribe(['SELECT * FROM note']);
-  await Future.delayed(Duration(milliseconds: 500));
+  await Future.delayed(const Duration(milliseconds: 500));
 
   final cache = subscriptionManager.cache.getTable<Note>(4096);
   print('✅ Loaded ${cache.count()} notes\n');
@@ -60,7 +61,7 @@ void main() async {
     });
 
     subscriptionManager.subscribe(['SELECT * FROM note']);
-    await completer.future.timeout(Duration(seconds: 5));
+    await completer.future.timeout(const Duration(seconds: 5));
   }
 
   final networkEnd = DateTime.now();

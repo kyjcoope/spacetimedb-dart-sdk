@@ -1,4 +1,5 @@
 /// Main database schema model for SpacetimeDB
+library;
 
 import 'type_models.dart';
 import 'table_models.dart';

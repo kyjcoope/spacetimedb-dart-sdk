@@ -128,6 +128,9 @@ class SpacetimeDbConnection {
                   connectTimeout: const Duration(seconds: 10),
                 )) {
     _shouldReconnect = config.autoReconnect;
+    // Emit initial quality after allowing time for subscribers to attach
+    // Use scheduleMicrotask to emit after constructor completes
+    scheduleMicrotask(() => _updateQuality());
   }
 
   ConnectionState get state => _state;
@@ -175,6 +178,7 @@ class SpacetimeDbConnection {
       _updateState(ConnectionState.connected);
       _updateStatus(ConnectionStatus.connected);
       _reconnectAttempts = 0; // Reset on successful connection
+      _updateQuality(); // Emit quality update after reconnect counter reset
     } catch (e) {
       _logger.e('Connection failed: $e');
 
@@ -240,6 +244,7 @@ class SpacetimeDbConnection {
       lastPongReceived: _lastMessageReceived,
     );
 
+    _logger.i('Quality update: health=${quality.healthScore.toStringAsFixed(1)} status=${quality.status.name} reconnects=${quality.reconnectAttempts}');
     _qualityController.add(quality);
   }
 
@@ -272,6 +277,7 @@ class SpacetimeDbConnection {
         // Every single message pushes the next ping 30 seconds into the future
         _keepAlive?.notifyMessageReceived();
         _lastMessageReceived = DateTime.now();
+        _updateQuality(); // Emit quality update after message received
 
         if (data is Uint8List) {
           // if (data.isNotEmpty) {
@@ -334,6 +340,7 @@ class SpacetimeDbConnection {
     }
 
     _reconnectAttempts++;
+    _updateQuality(); // Emit quality update after reconnect attempt increment
     final delay = _getReconnectDelay();
     _logger.i(
         'Reconnecting in ${delay.inSeconds}s (attempt $_reconnectAttempts/${config.maxReconnectAttempts})');
@@ -375,6 +382,7 @@ class SpacetimeDbConnection {
   Future<void> reconnect() async {
     await disconnect();
     _reconnectAttempts = 0;
+    _updateQuality(); // Emit quality update after reconnect counter reset
     _shouldReconnect = true;
     await connect();
   }
@@ -399,6 +407,7 @@ class SpacetimeDbConnection {
 
     _logger.i('Manual retry initiated');
     _reconnectAttempts = 0;
+    _updateQuality(); // Emit quality update after reconnect counter reset
     _shouldReconnect = true;
     await connect();
   }
@@ -452,6 +461,7 @@ class SpacetimeDbConnection {
           );
           send(message.encode());
           _lastPingSent = DateTime.now();
+          _updateQuality(); // Emit quality update after ping sent
         } catch (e) {
           _logger.e('Failed to send keep-alive ping: $e');
         }

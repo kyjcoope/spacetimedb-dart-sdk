@@ -19,8 +19,15 @@ class CustomLogPrinter extends LogPrinter {
   @override
   List<String> log(LogEvent event) {
     if (event.level == Level.debug) {
-      // Use pretty printer for debug logs
-      return _prettyPrinter.log(event);
+      // Use pretty printer for debug logs, but prefix the message
+      final modifiedEvent = LogEvent(
+        event.level,
+        '[SpacetimeDB-Dart-SDK] ${event.message}',
+        time: event.time,
+        error: event.error,
+        stackTrace: event.stackTrace,
+      );
+      return _prettyPrinter.log(modifiedEvent);
     } else {
       // Single-line format for info and other levels
       return _formatSingleLine(event);
@@ -32,7 +39,7 @@ class CustomLogPrinter extends LogPrinter {
     final location = _getCallerLocation();
     final levelIcon = _getLevelIcon(event.level);
 
-    return ['$levelIcon $message ($location)'];
+    return ['$levelIcon [SpacetimeDB-Dart-SDK] $message ($location)'];
   }
 
   String _getLevelIcon(Level level) {

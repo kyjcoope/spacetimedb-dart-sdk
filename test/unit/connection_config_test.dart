@@ -59,4 +59,26 @@ void main() {
       expect(ConnectionConfig.development.autoReconnect, false);
     });
   });
+
+  group('ConnectionQuality Stream', () {
+    test('Emits initial value immediately upon connection creation', () async {
+      final connection = SpacetimeDbConnection(
+        host: 'localhost:3000',
+        database: 'testdb',
+      );
+
+      // Subscribe to quality stream
+      final qualityFuture = connection.connectionQuality.first
+          .timeout(Duration(milliseconds: 100));
+
+      // Should receive initial quality value immediately (disconnected state)
+      final quality = await qualityFuture;
+
+      expect(quality.status, ConnectionStatus.disconnected);
+      expect(quality.healthScore, 0.0);
+      expect(quality.reconnectAttempts, 0);
+
+      await connection.dispose();
+    });
+  });
 }

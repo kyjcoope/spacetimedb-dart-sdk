@@ -269,7 +269,9 @@ void main() {
 
     test('Table delete stream emits deleted notes', () async {
       // First, create a note
-      final createTxFuture = subManager.onTransactionUpdate.first;
+      final createTxFuture = subManager.onTransactionUpdate
+          .where((tx) => tx.reducerCall.reducerName == 'create_note')
+          .first;
       await subManager.reducers.callWith('create_note', (encoder) {
         encoder.writeString('Delete Stream Test');
         encoder.writeString('Will be deleted');

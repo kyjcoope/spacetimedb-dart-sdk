@@ -57,6 +57,21 @@ class TypeMapper {
     TypeSpace? typeSpace,
     List<TypeDef>? typeDefs,
   }) {
+    // 1. Handle Timestamp (Product with __timestamp_micros_since_unix_epoch__)
+    if (algebraicType.containsKey('Product')) {
+      final product = algebraicType['Product'];
+      if (product is Map && product.containsKey('elements')) {
+        final elements = product['elements'] as List;
+        if (elements.length == 1) {
+          final element = elements[0];
+          if (element['name'] != null &&
+              element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
+            return 'int';
+          }
+        }
+      }
+    }
+
     if (algebraicType.containsKey('Ref')) {
       final typeIndex = algebraicType['Ref'] as int;
 
@@ -96,6 +111,21 @@ class TypeMapper {
   }
 
   static String getEncoderMethod(Map<String, dynamic> algebraicType) {
+    // Handle Timestamp
+    if (algebraicType.containsKey('Product')) {
+      final product = algebraicType['Product'];
+      if (product is Map && product.containsKey('elements')) {
+        final elements = product['elements'] as List;
+        if (elements.length == 1) {
+          final element = elements[0];
+          if (element['name'] != null &&
+              element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
+            return 'writeI64';
+          }
+        }
+      }
+    }
+
     for (final key in _encoderMethodMap.keys) {
       if (algebraicType.containsKey(key)) {
         return _encoderMethodMap[key]!;
@@ -105,6 +135,21 @@ class TypeMapper {
   }
 
   static String getDecoderMethod(Map<String, dynamic> algebraicType) {
+    // Handle Timestamp
+    if (algebraicType.containsKey('Product')) {
+      final product = algebraicType['Product'];
+      if (product is Map && product.containsKey('elements')) {
+        final elements = product['elements'] as List;
+        if (elements.length == 1) {
+          final element = elements[0];
+          if (element['name'] != null &&
+              element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
+            return 'readI64';
+          }
+        }
+      }
+    }
+
     for (final key in _decoderMethodMap.keys) {
       if (algebraicType.containsKey(key)) {
         return _decoderMethodMap[key]!;

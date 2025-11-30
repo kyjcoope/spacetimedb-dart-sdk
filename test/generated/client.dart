@@ -83,6 +83,7 @@ class SpacetimeDbClient {
     required String database,
     AuthTokenStore? authStorage,
     bool ssl = false, // Added SSL parameter (default false for localhost)
+    ConnectionConfig config = const ConnectionConfig(),
     List<String>? initialSubscriptions,
     Duration subscriptionTimeout = const Duration(seconds: 10),
   }) async {
@@ -98,6 +99,7 @@ class SpacetimeDbClient {
       database: database,
       initialToken: savedToken,
       ssl: ssl, // Pass SSL config to connection
+      config: config, // Pass connection config
     );
 
     final subscriptionManager = SubscriptionManager(connection);

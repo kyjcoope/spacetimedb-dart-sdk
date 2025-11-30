@@ -15,6 +15,7 @@ class TypeMapper {
     'F64': 'double',
     'Bool': 'bool',
     'String': 'String',
+    'Timestamp': 'int',
   };
 
   static const _encoderMethodMap = {
@@ -30,6 +31,7 @@ class TypeMapper {
     'F64': 'writeF64',
     'Bool': 'writeBool',
     'String': 'writeString',
+    'Timestamp': 'writeU64',
   };
 
   static const _decoderMethodMap = {
@@ -45,6 +47,7 @@ class TypeMapper {
     'F64': 'readF64',
     'Bool': 'readBool',
     'String': 'readString',
+    'Timestamp': 'readU64',
   };
 
   /// Map algebraic type to Dart type string

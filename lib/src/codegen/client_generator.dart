@@ -145,6 +145,7 @@ class ClientGenerator {
     buf.writeln('    required String database,');
     buf.writeln('    AuthTokenStore? authStorage,');
     buf.writeln('    bool ssl = false, // Added SSL parameter (default false for localhost)');
+    buf.writeln('    ConnectionConfig config = const ConnectionConfig(),');
     buf.writeln('    List<String>? initialSubscriptions,');
     buf.writeln('    Duration subscriptionTimeout = const Duration(seconds: 10),');
     buf.writeln('  }) async {');
@@ -160,6 +161,7 @@ class ClientGenerator {
     buf.writeln('      database: database,');
     buf.writeln('      initialToken: savedToken,');
     buf.writeln('      ssl: ssl, // Pass SSL config to connection');
+    buf.writeln('      config: config, // Pass connection config');
     buf.writeln('    );');
     buf.writeln();
     buf.writeln('    final subscriptionManager = SubscriptionManager(connection);');

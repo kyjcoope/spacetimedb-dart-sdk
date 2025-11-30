@@ -160,7 +160,8 @@ class SpacetimeDbConnection {
 
     try {
       final protocol = ssl ? 'wss' : 'ws';
-      final uri = Uri.parse('$protocol://$host/v1/database/$database/subscribe');
+      final uri =
+          Uri.parse('$protocol://$host/v1/database/$database/subscribe');
 
       final headers = <String, dynamic>{};
       if (_currentToken != null) {
@@ -244,7 +245,8 @@ class SpacetimeDbConnection {
       lastPongReceived: _lastMessageReceived,
     );
 
-    _logger.i('Quality update: health=${quality.healthScore.toStringAsFixed(1)} status=${quality.status.name} reconnects=${quality.reconnectAttempts}');
+    _logger.i(
+        'Quality update: health=${quality.healthScore.toStringAsFixed(1)} status=${quality.status.name} reconnects=${quality.reconnectAttempts}');
     _qualityController.add(quality);
   }
 
@@ -446,7 +448,6 @@ class SpacetimeDbConnection {
   void _setupKeepAlive() {
     _keepAlive = KeepAliveMonitor(
       onSendPing: () {
-        _logger.i('Connection idle - sending keep-alive ping');
         try {
           final messageId = Uint8List(16);
           for (var i = 0; i < 16; i++) {
@@ -461,7 +462,6 @@ class SpacetimeDbConnection {
           );
           send(message.encode());
           _lastPingSent = DateTime.now();
-          _updateQuality(); // Emit quality update after ping sent
         } catch (e) {
           _logger.e('Failed to send keep-alive ping: $e');
         }

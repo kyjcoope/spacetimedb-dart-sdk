@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -70,7 +71,7 @@ void main() {
 
     test('TableEvent types are properly defined', () {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test',
@@ -91,7 +92,7 @@ void main() {
 
     test('pattern matching compiles correctly', () {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test',
@@ -125,7 +126,7 @@ void main() {
 
     test('event context is accessible from table events', () {
       final reducerEvent = ReducerEvent(
-        timestamp: 123456,
+        timestamp: Int64(123456),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
@@ -144,7 +145,7 @@ void main() {
       // Verify reducer metadata is accessible
       final reducer = event.context.event as ReducerEvent;
       expect(reducer.reducerName, equals('test_reducer'));
-      expect(reducer.timestamp, equals(123456));
+      expect(reducer.timestamp, equals(Int64(123456)));
       expect(reducer.energyConsumed, equals(100));
       expect(reducer.status, isA<Committed>());
     });
@@ -169,7 +170,7 @@ void main() {
   group('Phase 3: Type Safety', () {
     test('no as casts needed with pattern matching', () {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test',

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/src/codec/bsatn_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/codec/bsatn_encoder.dart';
@@ -43,14 +44,14 @@ void main() {
 
     test('u64 round-trip', () {
       final encoder = BsatnEncoder();
-      encoder.writeU64(0);
-      encoder.writeU64(42);
-      encoder.writeU64(9223372036854775807); // Max safe int
+      encoder.writeU64(Int64.ZERO);
+      encoder.writeU64(Int64(42));
+      encoder.writeU64(Int64.MAX_VALUE);
 
       final decoder = BsatnDecoder(encoder.toBytes());
-      expect(decoder.readU64(), 0);
-      expect(decoder.readU64(), 42);
-      expect(decoder.readU64(), 9223372036854775807);
+      expect(decoder.readU64(), Int64.ZERO);
+      expect(decoder.readU64(), Int64(42));
+      expect(decoder.readU64(), Int64.MAX_VALUE);
     });
 
     test('i8 round-trip', () {
@@ -95,16 +96,16 @@ void main() {
 
     test('i64 round-trip', () {
       final encoder = BsatnEncoder();
-      encoder.writeI64(-9223372036854775808);
-      encoder.writeI64(-1);
-      encoder.writeI64(0);
-      encoder.writeI64(9223372036854775807);
+      encoder.writeI64(Int64.MIN_VALUE);
+      encoder.writeI64(Int64(-1));
+      encoder.writeI64(Int64.ZERO);
+      encoder.writeI64(Int64.MAX_VALUE);
 
       final decoder = BsatnDecoder(encoder.toBytes());
-      expect(decoder.readI64(), -9223372036854775808);
-      expect(decoder.readI64(), -1);
-      expect(decoder.readI64(), 0);
-      expect(decoder.readI64(), 9223372036854775807);
+      expect(decoder.readI64(), Int64.MIN_VALUE);
+      expect(decoder.readI64(), Int64(-1));
+      expect(decoder.readI64(), Int64.ZERO);
+      expect(decoder.readI64(), Int64.MAX_VALUE);
     });
 
     test('f32 round-trip', () {

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
+
 /// Encodes Dart values into BSATN (Binary Spacetime Algebraic Type Notation) format
 ///
 /// BSATN is SpacetimeDB's binary serialization format. Use this encoder to:
@@ -94,27 +96,19 @@ class BsatnEncoder {
     ]);
   }
 
-  /// Encodes an unsigned 64-bit integer in little-endian
-  ///
-  /// Example:
-  /// ```dart
-  /// encoder.writeU64(9223372036854775807);
-  /// ```
-  void writeU64(int value) {
-    if (value < 0) {
-      throw ArgumentError.value(value, 'value', 'Must be non-negative for u64');
-    }
-
-    _buffer.add([
-      value & 0xFF,
-      (value >> 8) & 0xFF,
-      (value >> 16) & 0xFF,
-      (value >> 24) & 0xFF,
-      (value >> 32) & 0xFF,
-      (value >> 40) & 0xFF,
-      (value >> 48) & 0xFF,
-      (value >> 56) & 0xFF,
-    ]);
+  void writeU64(Int64 value) {
+    final bytes = Uint8List(8);
+    final low = value.toInt() & 0xFFFFFFFF;
+    final high = (value >> 32).toInt() & 0xFFFFFFFF;
+    bytes[0] = low & 0xFF;
+    bytes[1] = (low >> 8) & 0xFF;
+    bytes[2] = (low >> 16) & 0xFF;
+    bytes[3] = (low >> 24) & 0xFF;
+    bytes[4] = high & 0xFF;
+    bytes[5] = (high >> 8) & 0xFF;
+    bytes[6] = (high >> 16) & 0xFF;
+    bytes[7] = (high >> 24) & 0xFF;
+    _buffer.add(bytes);
   }
 
   void writeI8(int value) {
@@ -143,10 +137,19 @@ class BsatnEncoder {
     writeU32(unsigned);
   }
 
-  void writeI64(int value) {
-    final data = ByteData(8);
-    data.setInt64(0, value, Endian.little);
-    _buffer.add(data.buffer.asUint8List());
+  void writeI64(Int64 value) {
+    final bytes = Uint8List(8);
+    final low = value.toInt() & 0xFFFFFFFF;
+    final high = (value >> 32).toInt() & 0xFFFFFFFF;
+    bytes[0] = low & 0xFF;
+    bytes[1] = (low >> 8) & 0xFF;
+    bytes[2] = (low >> 16) & 0xFF;
+    bytes[3] = (low >> 24) & 0xFF;
+    bytes[4] = high & 0xFF;
+    bytes[5] = (high >> 8) & 0xFF;
+    bytes[6] = (high >> 16) & 0xFF;
+    bytes[7] = (high >> 24) & 0xFF;
+    _buffer.add(bytes);
   }
 
   void writeF32(double value) {

@@ -1,23 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "mcp__obsidian-rust__list_notes",
-      "mcp__obsidian-rust__read_note",
-      "Skill(teacher-skill)",
-      "Bash(dart pub get:*)",
-      "WebSearch",
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:spacetimedb.com)",
-      "WebFetch(domain:docs.rs)",
-      "Bash(spacetime logs:*)",
-      "Bash(pkill:*)",
-      "Bash(dart run:*)",
-      "Bash(curl:*)",
-      "mcp__sequential-thinking__sequentialthinking",
-      "mcp__obsidian-rust__search_notes",
-      "mcp__obsidian-rust__delete_note",
-      "Bash(find:*)"
+      "Bash(dart test:*)",
+      "mcp__spacenotes-mcp__append_to_note",
+      "mcp__spacenotes-mcp__create_folder",
+      "mcp__spacenotes-mcp__create_note",
+      "mcp__spacenotes-mcp__delete_folder",
+      "mcp__spacenotes-mcp__delete_note",
+      "mcp__spacenotes-mcp__edit_note",
+      "mcp__spacenotes-mcp__get_note",
+      "mcp__spacenotes-mcp__list_notes_in_folder",
+      "mcp__spacenotes-mcp__move_folder",
+      "mcp__spacenotes-mcp__move_note",
+      "mcp__spacenotes-mcp__prepend_to_note"
     ],
     "deny": [],
     "ask": []

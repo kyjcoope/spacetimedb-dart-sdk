@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
+
 /// Decodes BSATN (Binary Spacetime Algebraic Type Notation) format into Dart values
 ///
 /// BSATN is SpacetimeDB's binary serialization format. Use this decoder to:
@@ -89,7 +91,7 @@ class BsatnDecoder {
     return value;
   }
 
-  int readU64() {
+  Int64 readU64() {
     _checkRemaining(8);
     final low = _bytes[_offset] |
         (_bytes[_offset + 1] << 8) |
@@ -100,7 +102,7 @@ class BsatnDecoder {
         (_bytes[_offset + 6] << 16) |
         (_bytes[_offset + 7] << 24);
     _offset += 8;
-    return (high << 32) | low;
+    return Int64.fromInts(high, low);
   }
 
   int readI8() {
@@ -118,12 +120,18 @@ class BsatnDecoder {
     return unsigned > 2147483647 ? unsigned - 4294967296 : unsigned;
   }
 
-  int readI64() {
+  Int64 readI64() {
     _checkRemaining(8);
-    final data = ByteData.sublistView(_bytes, _offset, _offset + 8);
-    final value = data.getInt64(0, Endian.little);
+    final low = _bytes[_offset] |
+        (_bytes[_offset + 1] << 8) |
+        (_bytes[_offset + 2] << 16) |
+        (_bytes[_offset + 3] << 24);
+    final high = _bytes[_offset + 4] |
+        (_bytes[_offset + 5] << 8) |
+        (_bytes[_offset + 6] << 16) |
+        (_bytes[_offset + 7] << 24);
     _offset += 8;
-    return value;
+    return Int64.fromInts(high, low);
   }
 
   double readF32() {

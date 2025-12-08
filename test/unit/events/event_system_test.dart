@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -6,7 +7,7 @@ void main() {
   group('Event sealed class', () {
     test('ReducerEvent can be created', () {
       final event = ReducerEvent(
-        timestamp: 123456,
+        timestamp: Int64(123456),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
@@ -15,7 +16,7 @@ void main() {
         reducerArgs: {'title': 'Test', 'content': 'Content'},
       );
 
-      expect(event.timestamp, equals(123456));
+      expect(event.timestamp, equals(Int64(123456)));
       expect(event.reducerName, equals('create_note'));
       expect(event.status, isA<Committed>());
     });
@@ -46,7 +47,7 @@ void main() {
 
       // Should compile and run without errors
       testEvent(ReducerEvent(
-        timestamp: 0,
+        timestamp: Int64.ZERO,
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test',
@@ -112,7 +113,7 @@ void main() {
       final myConnectionId = Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]);
 
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: myConnectionId,
@@ -130,7 +131,7 @@ void main() {
       final otherConnectionId = Uint8List.fromList([5, 6, 7, 8]);
 
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: otherConnectionId,
@@ -145,7 +146,7 @@ void main() {
 
     test('isMyTransaction returns false when myConnectionId is null', () {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
@@ -162,7 +163,7 @@ void main() {
       final myConnectionId = Uint8List.fromList([1, 2, 3, 4]);
 
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: null,
@@ -180,7 +181,7 @@ void main() {
       final otherConnectionId = Uint8List.fromList([1, 2, 3, 4]);
 
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: otherConnectionId,

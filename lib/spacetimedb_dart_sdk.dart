@@ -1,5 +1,8 @@
 library spacetimedb_dart_sdk;
 
+// Re-export Int64 from fixnum for web-compatible 64-bit integers
+export 'package:fixnum/fixnum.dart' show Int64;
+
 // Core connection
 export 'src/connection/spacetimedb_connection.dart';
 export 'src/connection/connection_state.dart';

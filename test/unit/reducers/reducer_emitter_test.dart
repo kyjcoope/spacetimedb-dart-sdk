@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -27,7 +28,7 @@ void main() {
 
     test('emit() sends event to registered listeners', () async {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test_reducer',
@@ -61,7 +62,7 @@ void main() {
       final context = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test_reducer',
@@ -87,7 +88,7 @@ void main() {
       final context1 = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'reducer1',
@@ -98,7 +99,7 @@ void main() {
       final context2 = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 456,
+          timestamp: Int64(456),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'reducer2',
@@ -159,7 +160,7 @@ void main() {
       final context = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test_reducer',
@@ -247,7 +248,7 @@ void main() {
       final context = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test_reducer',
@@ -295,7 +296,7 @@ void main() {
         EventContext(
         myConnectionId: null,
           event: ReducerEvent(
-            timestamp: 123,
+            timestamp: Int64(123),
             status: Committed(),
             callerIdentity: Uint8List(32),
             reducerName: 'test_reducer',
@@ -310,7 +311,7 @@ void main() {
         EventContext(
         myConnectionId: null,
           event: ReducerEvent(
-            timestamp: 456,
+            timestamp: Int64(456),
             status: Failed('error'),
             callerIdentity: Uint8List(32),
             reducerName: 'test_reducer',
@@ -361,7 +362,7 @@ void main() {
         EventContext(
         myConnectionId: null,
           event: ReducerEvent(
-            timestamp: 123,
+            timestamp: Int64(123),
             status: Committed(),
             callerIdentity: Uint8List(32),
             callerConnectionId: myConnectionId,
@@ -377,7 +378,7 @@ void main() {
         EventContext(
         myConnectionId: null,
           event: ReducerEvent(
-            timestamp: 456,
+            timestamp: Int64(456),
             status: Committed(),
             callerIdentity: Uint8List(32),
             callerConnectionId: otherConnectionId,

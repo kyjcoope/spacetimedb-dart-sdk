@@ -11,9 +11,7 @@ import 'package:spacetimedb_dart_sdk/src/codegen/dart_generator.dart';
 /// 2. connect() waits for initial subscription before returning
 /// 3. Cache is populated immediately after connect() returns
 ///
-/// Prerequisites:
-/// - SpacetimeDB local server running (spacetime start)
-/// - notesdb published (spacetime publish notesdb --server http://localhost:3000)
+/// Uses local project for schema extraction (no server required)
 void main() {
   group('Generated Client Integration', () {
     late Directory tempDir;
@@ -31,24 +29,11 @@ void main() {
     });
 
     test('Generated client auto-registers tables and waits for initial data', () async {
-      // Skip if local server not running
-      try {
-        final socket = await Socket.connect('localhost', 3000, timeout: const Duration(seconds: 2));
-        await socket.close();
-      } catch (e) {
-        print('⚠️  Skipping test - SpacetimeDB local server not running');
-        print('   Run: spacetime start');
-        return;
-      }
-
       print('\n🧪 Testing Generated Client Auto-Registration\n');
 
       // Step 1: Extract schema
-      print('📡 Extracting schema from notesdb...');
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      print('📡 Extracting schema from local project...');
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
 
       expect(schema.tables.isNotEmpty, true, reason: 'Schema should have tables');
       print('   ✅ Schema fetched: ${schema.tables.length} tables');
@@ -132,22 +117,10 @@ void main() {
     });
 
     test('Generated code structure is complete', () async {
-      // Skip if local server not running
-      try {
-        final socket = await Socket.connect('localhost', 3000, timeout: const Duration(seconds: 2));
-        await socket.close();
-      } catch (e) {
-        print('⚠️  Skipping test - SpacetimeDB local server not running');
-        return;
-      }
-
       print('\n🧪 Testing Generated Code Structure\n');
 
       // Extract schema
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
 
       // Generate code
       final generator = DartGenerator(schema);

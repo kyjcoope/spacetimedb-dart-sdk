@@ -21,14 +21,10 @@ void main() {
     });
 
     test('generates valid Dart code from notesdb schema', () async {
-      // Extract schema from network
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      // Extract schema from local project
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
 
       // Verify schema was fetched correctly
-      expect(schema.databaseName, equals('notesdb'));
       expect(schema.tables.length, greaterThan(0));
       expect(schema.reducers.length, greaterThan(0));
 
@@ -51,7 +47,7 @@ void main() {
       expect(noteContent, contains('final int id;'));
       expect(noteContent, contains('final String title;'));
       expect(noteContent, contains('final String content;'));
-      expect(noteContent, contains('final int timestamp;'));
+      expect(noteContent, contains('final Int64 timestamp;'));
       expect(noteContent, contains('void encodeBsatn(BsatnEncoder encoder)'));
       expect(noteContent, contains('static Note decodeBsatn(BsatnDecoder decoder)'));
       expect(noteContent, contains('encoder.writeU32(id);'));
@@ -100,10 +96,7 @@ void main() {
 
     test('generated code has valid Dart syntax', () async {
       // Extract schema and generate code
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
       final generator = DartGenerator(schema);
       await generator.writeToDirectory(tempDir.path);
 
@@ -147,10 +140,7 @@ void main() {
         await libDir.create();
 
         // Extract schema and generate code
-        final schema = await SchemaExtractor.fromNetwork(
-          database: 'notesdb',
-          server: 'http://localhost:3000',
-        );
+        final schema = await SchemaExtractor.fromProject('spacetime_test_module');
         final generator = DartGenerator(schema);
         await generator.writeToDirectory(libDir.path);
 
@@ -206,10 +196,7 @@ dependencies:
 
     test('handles multiple tables correctly', () async {
       // This test will pass even with single table, but verifies the structure
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
       final generator = DartGenerator(schema);
       final files = generator.generateAll();
 

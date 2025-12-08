@@ -1,4 +1,7 @@
 import 'dart:typed_data';
+
+import 'package:fixnum/fixnum.dart';
+
 import '../messages/update_status.dart';
 
 /// Base sealed class for all transaction events
@@ -29,7 +32,7 @@ sealed class Event {}
 /// including the reducer name, arguments, caller information, and execution status.
 class ReducerEvent extends Event {
   /// Server timestamp when the transaction occurred (microseconds since epoch)
-  final int timestamp;
+  final Int64 timestamp;
 
   /// Status of the transaction (Committed, Failed, or OutOfEnergy)
   final UpdateStatus status;

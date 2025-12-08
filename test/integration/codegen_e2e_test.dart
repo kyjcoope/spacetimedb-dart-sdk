@@ -26,11 +26,8 @@ void main() {
     test('Generated code functionality (Full CRUD cycle + Sum Types)', () async {
       print('Phase 1: Fetching Schema & Generating Code...');
 
-      // 1. Get Real Schema
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+      // 1. Get Real Schema from local project (no auth needed)
+      final schema = await SchemaExtractor.fromProject('spacetime_test_module');
 
       // 2. Generate Code into Temp Dir
       final generator = DartGenerator(schema);
@@ -103,9 +100,9 @@ void main() async {
     const testDraft = NoteStatusDraft();
     if (testDraft is! NoteStatusDraft) throw 'Enum construction failed';
 
-    final testPublished = NoteStatusPublished(1234567890);
+    final testPublished = NoteStatusPublished(Int64(1234567890));
     if (testPublished is! NoteStatusPublished) throw 'Enum with payload failed';
-    if (testPublished.value != 1234567890) throw 'Enum payload mismatch';
+    if (testPublished.value != Int64(1234567890)) throw 'Enum payload mismatch';
 
     print('   ✅ SUM TYPES Success. Status: \$statusDescription');
 

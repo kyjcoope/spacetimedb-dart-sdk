@@ -6,16 +6,16 @@ class TypeMapper {
     'U8': 'int',
     'U16': 'int',
     'U32': 'int',
-    'U64': 'int',
+    'U64': 'Int64',
     'I8': 'int',
     'I16': 'int',
     'I32': 'int',
-    'I64': 'int',
+    'I64': 'Int64',
     'F32': 'double',
     'F64': 'double',
     'Bool': 'bool',
     'String': 'String',
-    'Timestamp': 'int',
+    'Timestamp': 'Int64',
   };
 
   static const _encoderMethodMap = {
@@ -66,7 +66,7 @@ class TypeMapper {
           final element = elements[0];
           if (element['name'] != null &&
               element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
-            return 'int';
+            return 'Int64';
           }
         }
       }

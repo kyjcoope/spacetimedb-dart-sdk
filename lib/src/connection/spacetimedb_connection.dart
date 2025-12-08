@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:math' show Random;
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_state.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_status.dart';
@@ -11,8 +13,10 @@ import 'package:spacetimedb_dart_sdk/src/connection/connection_config.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/keep_alive_monitor.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/client_messages.dart';
 import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
-import 'package:web_socket_channel/io.dart';
+import 'platform.dart' show kIsWeb;
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'websocket.dart' as ws;
 
 /// Factory function for creating WebSocket channels
 /// Allows dependency injection for testing
@@ -120,13 +124,7 @@ class SpacetimeDbConnection {
     this.config = const ConnectionConfig(),
     WebSocketFactory? socketFactory,
   })  : _currentToken = initialToken,
-        _socketFactory = socketFactory ??
-            ((uri, protocols, headers) => IOWebSocketChannel.connect(
-                  uri,
-                  protocols: protocols,
-                  headers: headers,
-                  connectTimeout: const Duration(seconds: 10),
-                )) {
+        _socketFactory = socketFactory ?? ws.connectWebSocket {
     _shouldReconnect = config.autoReconnect;
     // Emit initial quality after allowing time for subscribers to attach
     // Use scheduleMicrotask to emit after constructor completes
@@ -149,6 +147,37 @@ class SpacetimeDbConnection {
     _logger.i('Authentication token updated');
   }
 
+  /// Exchange auth token for a short-lived WebSocket token (for web platform)
+  ///
+  /// On web, we can't send custom headers with WebSocket connections,
+  /// so we need to get a temporary token and pass it as a query parameter.
+  Future<String?> _getWebSocketToken() async {
+    if (_currentToken == null) return null;
+
+    try {
+      final httpProtocol = ssl ? 'https' : 'http';
+      final url = Uri.parse('$httpProtocol://$host/v1/identity/websocket-token');
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $_currentToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['token'] as String?;
+      } else {
+        _logger.e('Failed to get WebSocket token: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      _logger.e('Error getting WebSocket token: $e');
+      return null;
+    }
+  }
+
   Future<void> connect() async {
     if (_state != ConnectionState.disconnected) {
       _logger.i('Already connected or connecting');
@@ -160,11 +189,19 @@ class SpacetimeDbConnection {
 
     try {
       final protocol = ssl ? 'wss' : 'ws';
-      final uri =
-          Uri.parse('$protocol://$host/v1/database/$database/subscribe');
+      var uri = Uri.parse('$protocol://$host/v1/database/$database/subscribe');
 
       final headers = <String, dynamic>{};
-      if (_currentToken != null) {
+
+      // On web, we need to use query parameter for auth since WebSocket API
+      // doesn't support custom headers. Get a temporary token first.
+      if (kIsWeb && _currentToken != null) {
+        final wsToken = await _getWebSocketToken();
+        if (wsToken != null) {
+          uri = uri.replace(queryParameters: {'token': wsToken});
+        }
+      } else if (_currentToken != null) {
+        // On native platforms, use Authorization header
         headers['Authorization'] = 'Bearer $_currentToken';
       }
 

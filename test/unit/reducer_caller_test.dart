@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -428,7 +429,7 @@ Uint8List _createTransactionUpdate({
   }
 
   // Timestamp (nanoseconds since epoch)
-  encoder.writeU64(DateTime.now().microsecondsSinceEpoch * 1000);
+  encoder.writeU64(Int64(DateTime.now().microsecondsSinceEpoch) * Int64(1000));
 
   // Caller identity (32 bytes, all zeros for test)
   encoder.writeBytes(Uint8List(32));
@@ -453,7 +454,7 @@ Uint8List _createTransactionUpdate({
   encoder.writeBytes(energyBytes);
 
   // Execution duration (i64 microseconds, serialized as u64)
-  encoder.writeU64(executionDurationMicros ?? 0);
+  encoder.writeU64(Int64(executionDurationMicros ?? 0));
 
   return encoder.toBytes();
 }

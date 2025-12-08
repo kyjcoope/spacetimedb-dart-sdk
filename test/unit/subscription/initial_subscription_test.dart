@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -103,7 +104,7 @@ void main() {
       final reducerContext = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test_reducer',
@@ -237,7 +238,7 @@ void main() {
       final reducerContext = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test',
@@ -292,7 +293,7 @@ void main() {
       final reducerContext = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test',
@@ -348,7 +349,7 @@ void main() {
       final reducerContext = EventContext(
         myConnectionId: null,
         event: ReducerEvent(
-          timestamp: 123,
+          timestamp: Int64(123),
           status: Committed(),
           callerIdentity: Uint8List(32),
           reducerName: 'test',

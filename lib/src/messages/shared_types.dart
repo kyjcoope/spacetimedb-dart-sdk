@@ -1,4 +1,7 @@
 import 'dart:typed_data';
+
+import 'package:fixnum/fixnum.dart';
+
 import '../codec/bsatn_decoder.dart';
 
 /// Row list with optional size hint for efficient decoding
@@ -28,7 +31,7 @@ class BsatnRowList {
     } else if (hintTag == 1) {
       // RowOffsets variant - read offset list
       final numOffsets = decoder.readU32();
-      final offsets = List<int>.generate(numOffsets, (_) => decoder.readU64());
+      final offsets = List<int>.generate(numOffsets, (_) => decoder.readU64().toInt());
       sizeHint = RowSizeHint.rowOffsets(offsets);
     } else {
       throw ArgumentError('Unknown RowSizeHint tag: $hintTag');
@@ -87,7 +90,7 @@ class CompressableQueryUpdate {
 class TableUpdate {
   final int tableId;
   final String tableName;
-  final int numRows;
+  final Int64 numRows;
   final List<CompressableQueryUpdate> updates;
 
   TableUpdate({

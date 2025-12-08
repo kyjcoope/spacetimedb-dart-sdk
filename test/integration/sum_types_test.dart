@@ -2,6 +2,7 @@ library;
 
 // ignore_for_file: avoid_print
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -61,7 +62,7 @@ void main() {
         id: 1,
         title: 'Test',
         content: 'Content',
-        timestamp: 0,
+        timestamp: Int64.ZERO,
         status: const NoteStatusDraft(),
       );
 
@@ -79,10 +80,10 @@ void main() {
           reason: 'Draft should extend NoteStatus sealed class');
 
       // Test 2: Published variant (tuple single with u64)
-      const published = NoteStatusPublished(1234567890);
+      final published = NoteStatusPublished(Int64(1234567890));
       expect(published, isA<NoteStatus>(),
           reason: 'Published should extend NoteStatus sealed class');
-      expect(published.value, equals(1234567890),
+      expect(published.value, equals(Int64(1234567890)),
           reason: 'Published should store u64 value');
 
       // Test 3: Archived variant (unit type)
@@ -117,7 +118,7 @@ void main() {
           reason: 'Should decode back to Draft');
 
       // Test Published variant (tag 1, u64 payload)
-      const originalPublished = NoteStatusPublished(1234567890);
+      final originalPublished = NoteStatusPublished(Int64(1234567890));
       final encoder2 = BsatnEncoder();
       originalPublished.encode(encoder2); // Generated encode method
       final publishedBytes = encoder2.toBytes();
@@ -132,7 +133,7 @@ void main() {
           reason: 'Should decode back to Published');
 
       final publishedValue = decodedPublished as NoteStatusPublished;
-      expect(publishedValue.value, equals(1234567890),
+      expect(publishedValue.value, equals(Int64(1234567890)),
           reason: 'Decoded value should match original');
 
       // Test Archived variant (tag 2, no payload)
@@ -206,7 +207,7 @@ void main() {
         id: 999,
         title: 'Test',
         content: 'Content',
-        timestamp: 0,
+        timestamp: Int64.ZERO,
         status: const NoteStatusDraft(), // Must accept NoteStatus type
       );
 
@@ -260,7 +261,7 @@ void main() {
           // Published needs payload
           final encoder = BsatnEncoder();
           encoder.writeU8(1);
-          encoder.writeU64(9999);
+          encoder.writeU64(Int64(9999));
           final bytesWithPayload = encoder.toBytes();
           final decoded = NoteStatus.decode(BsatnDecoder(bytesWithPayload));
           expect(decoded.runtimeType, equals(testCase.type),

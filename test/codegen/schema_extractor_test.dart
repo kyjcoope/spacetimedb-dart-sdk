@@ -102,13 +102,10 @@ WARNING: at start
   });
 
   group('SchemaExtractor', () {
-    test('fromNetwork - fetch schema from running database', () async {
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+    test('fromProject - fetch schema from local project', () async {
+      final sdkRoot = findSdkRoot();
+      final schema = await SchemaExtractor.fromProject('$sdkRoot/spacetime_test_module');
 
-      expect(schema.databaseName, 'notesdb');
       expect(schema.tables.isNotEmpty, true);
       expect(schema.tables.map((t) => t.name), contains('note'));
       expect(schema.tables.map((t) => t.name), contains('folder'));
@@ -199,15 +196,13 @@ WARNING: at start
       );
     });
 
-    test('fromNetwork - filters WARNING lines from output', () async {
-      final schema = await SchemaExtractor.fromNetwork(
-        database: 'notesdb',
-        server: 'http://localhost:3000',
-      );
+    test('fromProject - filters WARNING lines from output', () async {
+      final sdkRoot = findSdkRoot();
+      final schema = await SchemaExtractor.fromProject('$sdkRoot/spacetime_test_module');
 
       // If we got here without JSON parsing errors, warnings were filtered
       expect(schema, isNotNull);
-      expect(schema.databaseName, 'notesdb');
+      expect(schema.tables.isNotEmpty, true);
     }, tags: ['integration']);
   });
 

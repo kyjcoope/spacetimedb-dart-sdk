@@ -1,3 +1,5 @@
+import 'package:fixnum/fixnum.dart';
+
 import '../messages/server_messages.dart';
 import '../messages/update_status.dart';
 
@@ -53,10 +55,10 @@ class TransactionResult {
     return TransactionResult(
       status: message.status,
       timestamp: DateTime.fromMicrosecondsSinceEpoch(
-        message.timestamp ~/ 1000, // Convert nanoseconds to microseconds
+        (message.timestamp ~/ Int64(1000)).toInt(),
       ),
       energyConsumed: message.energyQuantaUsed,
-      executionDuration: Duration(microseconds: message.totalHostExecutionDuration),
+      executionDuration: Duration(microseconds: message.totalHostExecutionDuration.toInt()),
       reducerName: message.reducerCall.reducerName,
       reducerId: message.reducerCall.reducerId,
       isLightUpdate: false,

@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
@@ -11,7 +12,7 @@ void main() {
 
       final message = TransactionUpdateMessage(
         transactionOffset: 1,
-        timestamp: 123456,
+        timestamp: Int64(123456),
         tableUpdates: [],
         status: Committed(),
         reducerCall: ReducerInfo(
@@ -23,7 +24,7 @@ void main() {
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
         energyQuantaUsed: 100,
-        totalHostExecutionDuration: 5000,
+        totalHostExecutionDuration: Int64(5000),
       );
 
       // Verify the message structure
@@ -39,7 +40,7 @@ void main() {
     test('handles Failed transaction status', () {
       final message = TransactionUpdateMessage(
         transactionOffset: 1,
-        timestamp: 123456,
+        timestamp: Int64(123456),
         tableUpdates: [],
         status: Failed('Database error'),
         reducerCall: ReducerInfo(
@@ -51,7 +52,7 @@ void main() {
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
         energyQuantaUsed: 50,
-        totalHostExecutionDuration: 2000,
+        totalHostExecutionDuration: Int64(2000),
       );
 
       expect(message.status, isA<Failed>());
@@ -65,7 +66,7 @@ void main() {
     test('handles OutOfEnergy transaction status', () {
       final message = TransactionUpdateMessage(
         transactionOffset: 1,
-        timestamp: 123456,
+        timestamp: Int64(123456),
         tableUpdates: [],
         status: OutOfEnergy('Budget exceeded: 1000/500'),
         reducerCall: ReducerInfo(
@@ -77,7 +78,7 @@ void main() {
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
         energyQuantaUsed: 1000,
-        totalHostExecutionDuration: 10000,
+        totalHostExecutionDuration: Int64(10000),
       );
 
       expect(message.status, isA<OutOfEnergy>());
@@ -103,7 +104,7 @@ void main() {
 
     test('EventContext with ReducerEvent', () {
       final event = ReducerEvent(
-        timestamp: 123456,
+        timestamp: Int64(123456),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
@@ -124,14 +125,14 @@ void main() {
       }
       // After type guard, access fields directly from promoted type
       expect(contextEvent.reducerName, equals('test_reducer'));
-      expect(contextEvent.timestamp, equals(123456));
+      expect(contextEvent.timestamp, equals(Int64(123456)));
       expect(contextEvent.energyConsumed, equals(100));
     });
   });
 
   group('Event Type Creation from TransactionUpdateMessage', () {
     test('ReducerEvent preserves all metadata fields', () {
-      const timestamp = 987654321;
+      final timestamp = Int64(987654321);
       final status = Committed();
       final callerIdentity = Uint8List(32);
       final callerConnectionId = Uint8List.fromList([5, 6, 7, 8]);
@@ -161,7 +162,7 @@ void main() {
 
     test('handles null optional fields gracefully', () {
       final event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: null, // Optional
@@ -191,7 +192,7 @@ void main() {
   group('No as Casts Rule', () {
     test('uses type guards instead of as casts', () {
       final Event event = ReducerEvent(
-        timestamp: 123,
+        timestamp: Int64(123),
         status: Committed(),
         callerIdentity: Uint8List(32),
         reducerName: 'test',

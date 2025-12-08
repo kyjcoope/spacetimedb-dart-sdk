@@ -1,4 +1,7 @@
 import 'dart:typed_data';
+
+import 'package:fixnum/fixnum.dart';
+
 import '../codec/bsatn_decoder.dart';
 import 'shared_types.dart';
 import 'reducer_info.dart';
@@ -38,7 +41,7 @@ abstract class ServerMessage {
 class InitialSubscriptionMessage implements ServerMessage {
   final List<TableUpdate> tableUpdates;
   final int requestId;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
 
   InitialSubscriptionMessage({
     required this.tableUpdates,
@@ -64,7 +67,7 @@ class InitialSubscriptionMessage implements ServerMessage {
 
 class TransactionUpdateMessage implements ServerMessage {
   final int transactionOffset;
-  final int timestamp;
+  final Int64 timestamp;
   final List<TableUpdate> tableUpdates;
 
   // Transaction metadata fields (from Rust TransactionUpdate struct)
@@ -73,7 +76,7 @@ class TransactionUpdateMessage implements ServerMessage {
   final Uint8List callerConnectionId;      // ConnectionId: u128 (16 bytes), NOT Option
   final ReducerInfo reducerCall;           // ReducerCallInfo struct
   final int energyQuantaUsed;              // EnergyQuanta: u128 - stored as int (will lose precision for huge values)
-  final int totalHostExecutionDuration;    // TimeDuration: i64 microseconds
+  final Int64 totalHostExecutionDuration;    // TimeDuration: i64 microseconds
 
   TransactionUpdateMessage({
     required this.transactionOffset,
@@ -209,7 +212,7 @@ class OneOffQueryResponse implements ServerMessage {
   final int requestId;
   final String? error;
   final List<OneOffTable> tables;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
 
   OneOffQueryResponse({
     required this.messageId,
@@ -263,7 +266,7 @@ class OneOffTable {
 /// Response to Subscribe containing initial matching rows
 class SubscribeApplied implements ServerMessage {
   final int requestId;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
   final int queryId;
   final SubscribeRows rows;
 
@@ -319,7 +322,7 @@ class SubscribeRows {
 /// Response to Unsubscribe
 class UnsubscribeApplied implements ServerMessage {
   final int requestId;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
   final int queryId;
   final SubscribeRows rows;
 
@@ -350,7 +353,7 @@ class UnsubscribeApplied implements ServerMessage {
 
 /// Subscription error from server
 class SubscriptionErrorMessage implements ServerMessage {
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
   final int requestId;
   final int queryId;
   final int tableId;
@@ -388,7 +391,7 @@ class SubscriptionErrorMessage implements ServerMessage {
 /// Response to SubscribeMulti containing initial matching rows
 class SubscribeMultiApplied implements ServerMessage {
   final int requestId;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
   final int queryId;
   final List<TableUpdate> tableUpdates;
 
@@ -421,7 +424,7 @@ class SubscribeMultiApplied implements ServerMessage {
 /// Response to UnsubscribeMulti
 class UnsubscribeMultiApplied implements ServerMessage {
   final int requestId;
-  final int totalHostExecutionDurationMicros;
+  final Int64 totalHostExecutionDurationMicros;
   final int queryId;
   final List<TableUpdate> tableUpdates;
 
@@ -455,8 +458,8 @@ class UnsubscribeMultiApplied implements ServerMessage {
 /// Result of a procedure/reducer call
 class ProcedureResultMessage implements ServerMessage {
   final ProcedureStatus status;
-  final int timestamp;
-  final int totalHostExecutionDurationMicros;
+  final Int64 timestamp;
+  final Int64 totalHostExecutionDurationMicros;
   final int requestId;
 
   ProcedureResultMessage({

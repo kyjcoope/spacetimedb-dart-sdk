@@ -7,7 +7,7 @@ class Note {
   final int id;
   final String title;
   final String content;
-  final int timestamp;
+  final Int64 timestamp;
   final NoteStatus status;
 
   Note({

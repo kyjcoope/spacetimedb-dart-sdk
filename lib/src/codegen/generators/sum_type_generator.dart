@@ -53,7 +53,16 @@ ${_generateSwitchCases()}
     }
   }
 
+  factory $enumName.fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as String;
+    switch (type) {
+${_generateFromJsonSwitchCases()}
+      default: throw Exception('Unknown $enumName variant: \$type');
+    }
+  }
+
   void encode(BsatnEncoder encoder);
+  Map<String, dynamic> toJson();
 }''';
   }
 
@@ -67,23 +76,35 @@ ${_generateSwitchCases()}
     return cases.join('\n');
   }
 
+  String _generateFromJsonSwitchCases() {
+    final cases = <String>[];
+    for (var i = 0; i < sumType.variants.length; i++) {
+      final variant = sumType.variants[i];
+      final variantClassName = _getVariantClassName(variant, i);
+      final variantName = variant.name ?? 'Variant$i';
+      cases.add("      case '$variantName': return $variantClassName.fromJson(json);");
+    }
+    return cases.join('\n');
+  }
+
   String _generateVariantClass(SumVariant variant, int tag) {
     final variantType = _getVariantType(variant);
     final className = _getVariantClassName(variant, tag);
+    final variantName = variant.name ?? 'Variant$tag';
 
     switch (variantType) {
       case VariantType.unit:
-        return _generateUnitVariant(className, tag);
+        return _generateUnitVariant(className, tag, variantName);
       case VariantType.tupleSingle:
-        return _generateTupleSingleVariant(className, variant, tag);
+        return _generateTupleSingleVariant(className, variant, tag, variantName);
       case VariantType.tupleMultiple:
-        return _generateTupleMultipleVariant(className, variant, tag);
+        return _generateTupleMultipleVariant(className, variant, tag, variantName);
       case VariantType.struct:
-        return _generateStructVariant(className, variant, tag);
+        return _generateStructVariant(className, variant, tag, variantName);
     }
   }
 
-  String _generateUnitVariant(String className, int tag) {
+  String _generateUnitVariant(String className, int tag, String variantName) {
     return '''
 class $className extends $enumName {
   const $className();
@@ -92,15 +113,22 @@ class $className extends $enumName {
     return const $className();
   }
 
+  factory $className.fromJson(Map<String, dynamic> json) {
+    return const $className();
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8($tag);
   }
+
+  @override
+  Map<String, dynamic> toJson() => {'type': '$variantName'};
 }''';
   }
 
   String _generateTupleSingleVariant(
-      String className, SumVariant variant, int tag) {
+      String className, SumVariant variant, int tag, String variantName) {
     final type = variant.algebraicType;
     final Map<String, dynamic> algebraicType;
 
@@ -113,6 +141,8 @@ class $className extends $enumName {
     final dartType = TypeMapper.toDartType(algebraicType);
     final decoderMethod = TypeMapper.getDecoderMethod(algebraicType);
     final encoderMethod = TypeMapper.getEncoderMethod(algebraicType);
+    final toJsonValue = _getToJsonValue('value', algebraicType);
+    final fromJsonValue = _getFromJsonValue('value', algebraicType, dartType);
 
     return '''
 class $className extends $enumName {
@@ -124,21 +154,30 @@ class $className extends $enumName {
     return $className(decoder.$decoderMethod());
   }
 
+  factory $className.fromJson(Map<String, dynamic> json) {
+    return $className($fromJsonValue);
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8($tag);
     encoder.$encoderMethod(value);
   }
+
+  @override
+  Map<String, dynamic> toJson() => {'type': '$variantName', 'value': $toJsonValue};
 }''';
   }
 
   String _generateTupleMultipleVariant(
-      String className, SumVariant variant, int tag) {
+      String className, SumVariant variant, int tag, String variantName) {
     final elements = variant.algebraicType.product!.elements;
     final fields = <String>[];
     final params = <String>[];
     final decodeStatements = <String>[];
     final encodeStatements = <String>[];
+    final toJsonFields = <String>[];
+    final fromJsonArgs = <String>[];
 
     for (var i = 0; i < elements.length; i++) {
       final element = elements[i];
@@ -146,11 +185,15 @@ class $className extends $enumName {
       final dartType = TypeMapper.toDartType(element.algebraicType);
       final decoderMethod = TypeMapper.getDecoderMethod(element.algebraicType);
       final encoderMethod = TypeMapper.getEncoderMethod(element.algebraicType);
+      final toJsonValue = _getToJsonValue(fieldName, element.algebraicType);
+      final fromJsonValue = _getFromJsonValue(fieldName, element.algebraicType, dartType);
 
       fields.add('  final $dartType $fieldName;');
       params.add('this.$fieldName');
       decodeStatements.add('      decoder.$decoderMethod(),');
       encodeStatements.add('    encoder.$encoderMethod($fieldName);');
+      toJsonFields.add("      '$fieldName': $toJsonValue,");
+      fromJsonArgs.add('      $fromJsonValue,');
     }
 
     return '''
@@ -165,32 +208,50 @@ ${decodeStatements.join('\n')}
     );
   }
 
+  factory $className.fromJson(Map<String, dynamic> json) {
+    return $className(
+${fromJsonArgs.join('\n')}
+    );
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8($tag);
 ${encodeStatements.join('\n')}
   }
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': '$variantName',
+${toJsonFields.join('\n')}
+  };
 }''';
   }
 
   String _generateStructVariant(
-      String className, SumVariant variant, int tag) {
+      String className, SumVariant variant, int tag, String variantName) {
     final elements = variant.algebraicType.product!.elements;
     final fields = <String>[];
     final namedParams = <String>[];
     final decodeStatements = <String>[];
     final encodeStatements = <String>[];
+    final toJsonFields = <String>[];
+    final fromJsonArgs = <String>[];
 
     for (final element in elements) {
       final fieldName = element.name ?? 'field';
       final dartType = TypeMapper.toDartType(element.algebraicType);
       final decoderMethod = TypeMapper.getDecoderMethod(element.algebraicType);
       final encoderMethod = TypeMapper.getEncoderMethod(element.algebraicType);
+      final toJsonValue = _getToJsonValue(fieldName, element.algebraicType);
+      final fromJsonValue = _getFromJsonValue(fieldName, element.algebraicType, dartType);
 
       fields.add('  final $dartType $fieldName;');
       namedParams.add('required this.$fieldName');
       decodeStatements.add('      $fieldName: decoder.$decoderMethod(),');
       encodeStatements.add('    encoder.$encoderMethod($fieldName);');
+      toJsonFields.add("      '$fieldName': $toJsonValue,");
+      fromJsonArgs.add('      $fieldName: $fromJsonValue,');
     }
 
     return '''
@@ -205,11 +266,23 @@ ${decodeStatements.join('\n')}
     );
   }
 
+  factory $className.fromJson(Map<String, dynamic> json) {
+    return $className(
+${fromJsonArgs.join('\n')}
+    );
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8($tag);
 ${encodeStatements.join('\n')}
   }
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': '$variantName',
+${toJsonFields.join('\n')}
+  };
 }''';
   }
 
@@ -255,5 +328,36 @@ ${encodeStatements.join('\n')}
   String _toPascalCase(String input) {
     if (input.isEmpty) return input;
     return input[0].toUpperCase() + input.substring(1);
+  }
+
+  String _getToJsonValue(String fieldName, Map<String, dynamic> algebraicType) {
+    if (algebraicType.containsKey('U64') || algebraicType.containsKey('I64')) {
+      return '$fieldName.toInt()';
+    }
+    return fieldName;
+  }
+
+  String _getFromJsonValue(String fieldName, Map<String, dynamic> algebraicType, String dartType) {
+    if (algebraicType.containsKey('U64') || algebraicType.containsKey('I64')) {
+      return "Int64(json['$fieldName'] as int)";
+    }
+    if (algebraicType.containsKey('String')) {
+      return "json['$fieldName'] as String";
+    }
+    if (algebraicType.containsKey('Bool')) {
+      return "json['$fieldName'] as bool";
+    }
+    if (algebraicType.containsKey('F32') || algebraicType.containsKey('F64')) {
+      return "(json['$fieldName'] as num).toDouble()";
+    }
+    if (algebraicType.containsKey('U8') ||
+        algebraicType.containsKey('U16') ||
+        algebraicType.containsKey('U32') ||
+        algebraicType.containsKey('I8') ||
+        algebraicType.containsKey('I16') ||
+        algebraicType.containsKey('I32')) {
+      return "json['$fieldName'] as int";
+    }
+    return "json['$fieldName']";
   }
 }

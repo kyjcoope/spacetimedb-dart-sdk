@@ -5,9 +5,10 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 WebSocketChannel connectWebSocket(
   Uri uri,
   Iterable<String>? protocols,
-  Map<String, dynamic>? headers,
-) {
-  // Note: HtmlWebSocketChannel doesn't support custom headers
+  Map<String, dynamic>? headers, {
+  Duration connectTimeout = const Duration(seconds: 10),
+}) {
+  // Note: HtmlWebSocketChannel doesn't support custom headers or timeout
   // Authentication must be done via query parameters or after connection
   return HtmlWebSocketChannel.connect(
     uri,

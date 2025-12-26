@@ -15,7 +15,18 @@ sealed class NoteStatus {
     }
   }
 
+  factory NoteStatus.fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as String;
+    switch (type) {
+      case 'Draft': return NoteStatusDraft.fromJson(json);
+      case 'Published': return NoteStatusPublished.fromJson(json);
+      case 'Archived': return NoteStatusArchived.fromJson(json);
+      default: throw Exception('Unknown NoteStatus variant: $type');
+    }
+  }
+
   void encode(BsatnEncoder encoder);
+  Map<String, dynamic> toJson();
 }
 
 class NoteStatusDraft extends NoteStatus {
@@ -25,10 +36,17 @@ class NoteStatusDraft extends NoteStatus {
     return const NoteStatusDraft();
   }
 
+  factory NoteStatusDraft.fromJson(Map<String, dynamic> json) {
+    return const NoteStatusDraft();
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8(0);
   }
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'Draft'};
 }
 
 class NoteStatusPublished extends NoteStatus {
@@ -40,11 +58,18 @@ class NoteStatusPublished extends NoteStatus {
     return NoteStatusPublished(decoder.readU64());
   }
 
+  factory NoteStatusPublished.fromJson(Map<String, dynamic> json) {
+    return NoteStatusPublished(Int64(json['value'] as int));
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8(1);
     encoder.writeU64(value);
   }
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'Published', 'value': value.toInt()};
 }
 
 class NoteStatusArchived extends NoteStatus {
@@ -54,9 +79,16 @@ class NoteStatusArchived extends NoteStatus {
     return const NoteStatusArchived();
   }
 
+  factory NoteStatusArchived.fromJson(Map<String, dynamic> json) {
+    return const NoteStatusArchived();
+  }
+
   @override
   void encode(BsatnEncoder encoder) {
     encoder.writeU8(2);
   }
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'Archived'};
 }
 

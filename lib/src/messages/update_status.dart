@@ -20,13 +20,16 @@ class Failed extends UpdateStatus {
   String toString() => 'Failed(message: $message)';
 }
 
-/// Transaction aborted due to insufficient energy budget
 class OutOfEnergy extends UpdateStatus {
-  /// Information about the energy budget that was exceeded
   final String budgetInfo;
 
   OutOfEnergy(this.budgetInfo);
 
   @override
   String toString() => 'OutOfEnergy(budgetInfo: $budgetInfo)';
+}
+
+class Pending extends UpdateStatus {
+  @override
+  String toString() => 'Pending()';
 }

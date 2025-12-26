@@ -70,6 +70,18 @@ class ClientGenerator {
     buf.writeln('  /// Available after connection is established. Returns null if not authenticated.');
     buf.writeln('  String? get token => connection.token;');
     buf.writeln();
+    buf.writeln('  /// Whether offline storage is enabled');
+    buf.writeln('  bool get hasOfflineStorage => subscriptions.hasOfflineStorage;');
+    buf.writeln();
+    buf.writeln('  /// Current sync state for offline mutations');
+    buf.writeln('  SyncState get syncState => subscriptions.syncState;');
+    buf.writeln();
+    buf.writeln('  /// Stream of sync state changes');
+    buf.writeln('  Stream<SyncState> get onSyncStateChanged => subscriptions.onSyncStateChanged;');
+    buf.writeln();
+    buf.writeln('  /// Stream of individual mutation sync results');
+    buf.writeln('  Stream<MutationSyncResult> get onMutationSyncResult => subscriptions.onMutationSyncResult;');
+    buf.writeln();
 
     // Table cache getters
     for (final table in schema.tables) {
@@ -144,10 +156,12 @@ class ClientGenerator {
     buf.writeln('    required String host,');
     buf.writeln('    required String database,');
     buf.writeln('    AuthTokenStore? authStorage,');
-    buf.writeln('    bool ssl = false, // Added SSL parameter (default false for localhost)');
+    buf.writeln('    OfflineStorage? offlineStorage,');
+    buf.writeln('    bool ssl = false,');
     buf.writeln('    ConnectionConfig config = const ConnectionConfig(),');
     buf.writeln('    List<String>? initialSubscriptions,');
     buf.writeln('    Duration subscriptionTimeout = const Duration(seconds: 10),');
+    buf.writeln('    void Function($clientName client)? onCacheLoaded,');
     buf.writeln('  }) async {');
     buf.writeln('    // Setup storage (default to in-memory)');
     buf.writeln('    final storage = authStorage ?? InMemoryTokenStore();');
@@ -164,7 +178,7 @@ class ClientGenerator {
     buf.writeln('      config: config, // Pass connection config');
     buf.writeln('    );');
     buf.writeln();
-    buf.writeln('    final subscriptionManager = SubscriptionManager(connection);');
+    buf.writeln('    final subscriptionManager = SubscriptionManager(connection, offlineStorage: offlineStorage);');
     buf.writeln();
 
     // Auto-register table decoders (Phase 1: Static Registration)
@@ -208,12 +222,25 @@ class ClientGenerator {
     buf.writeln('      connection.updateToken(msg.token);');
     buf.writeln('    });');
     buf.writeln();
-    buf.writeln('    await connection.connect();');
+    buf.writeln('    // Load cached data before connecting (for offline-first support)');
+    buf.writeln('    if (offlineStorage != null) {');
+    buf.writeln('      await subscriptionManager.loadFromOfflineCache();');
+    buf.writeln('      onCacheLoaded?.call(client);');
+    buf.writeln('    }');
     buf.writeln();
-    buf.writeln('    if (initialSubscriptions != null && initialSubscriptions.isNotEmpty) {');
-    buf.writeln('      // Wait for initial subscription data to load with timeout');
-    buf.writeln('      // Throws TimeoutException if subscriptions take too long - caller can handle this');
-    buf.writeln('      await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);');
+    buf.writeln('    // Connect and subscribe - with offline support, this is non-blocking on failure');
+    buf.writeln('    try {');
+    buf.writeln('      await connection.connect().timeout(config.connectTimeout);');
+    buf.writeln('      if (initialSubscriptions != null && initialSubscriptions.isNotEmpty) {');
+    buf.writeln('        await subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout);');
+    buf.writeln('      }');
+    buf.writeln('    } catch (e) {');
+    buf.writeln('      if (offlineStorage != null) {');
+    buf.writeln("        // Offline mode: connection failed but we have cached data, continue in offline mode");
+    buf.writeln("        print('📴 Connection failed, operating in offline mode: \$e');");
+    buf.writeln('      } else {');
+    buf.writeln('        rethrow;');
+    buf.writeln('      }');
     buf.writeln('    }');
     buf.writeln();
     buf.writeln('    return client;');

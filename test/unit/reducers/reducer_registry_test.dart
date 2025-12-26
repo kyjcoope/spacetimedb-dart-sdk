@@ -176,6 +176,7 @@ void main() {
       final UpdateStatus committed = Committed();
       final UpdateStatus failed = Failed('error');
       final UpdateStatus outOfEnergy = OutOfEnergy('budget');
+      final UpdateStatus pending = Pending();
 
       // Can use switch with exhaustive matching
       String describe(UpdateStatus status) {
@@ -183,12 +184,14 @@ void main() {
           Committed() => 'success',
           Failed(message: final msg) => 'failed: $msg',
           OutOfEnergy(budgetInfo: final info) => 'out of energy: $info',
+          Pending() => 'pending',
         };
       }
 
       expect(describe(committed), equals('success'));
       expect(describe(failed), equals('failed: error'));
       expect(describe(outOfEnergy), equals('out of energy: budget'));
+      expect(describe(pending), equals('pending'));
     });
   });
 }

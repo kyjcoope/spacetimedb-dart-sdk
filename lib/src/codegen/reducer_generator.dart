@@ -79,7 +79,6 @@ class ReducerGenerator {
   void _generateReducerMethod(StringBuffer buf, ReducerSchema reducer) {
     final methodName = _toCamelCase(reducer.name);
 
-    // Method documentation
     buf.writeln('  /// Call the ${reducer.name} reducer');
     buf.writeln('  ///');
     buf.writeln('  /// Returns [TransactionResult] with execution metadata:');
@@ -87,14 +86,16 @@ class ReducerGenerator {
     buf.writeln('  /// - `result.energyConsumed` - Energy used (null for lightweight responses)');
     buf.writeln('  /// - `result.executionDuration` - How long it took (null for lightweight responses)');
     buf.writeln('  ///');
+    buf.writeln('  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.');
+    buf.writeln('  /// Changes are rolled back if the server rejects them.');
+    buf.writeln('  ///');
     buf.writeln('  /// Throws [ReducerException] if the reducer fails or runs out of energy.');
     buf.writeln('  /// Throws [TimeoutException] if the reducer doesn\'t complete within the timeout.');
 
-    // Method signature with TransactionResult return type
     buf.write('  Future<TransactionResult> $methodName(');
 
     if (reducer.params.elements.isEmpty) {
-      buf.writeln(') async {');
+      buf.writeln('{List<OptimisticChange>? optimisticChanges}) async {');
     } else {
       buf.writeln('{');
       for (final param in reducer.params.elements) {
@@ -102,10 +103,10 @@ class ReducerGenerator {
         final dartType = TypeMapper.toDartType(param.algebraicType);
         buf.writeln('    required $dartType $paramName,');
       }
+      buf.writeln('    List<OptimisticChange>? optimisticChanges,');
       buf.writeln('  }) async {');
     }
 
-    // Encode arguments
     buf.writeln('    final encoder = BsatnEncoder();');
     for (final param in reducer.params.elements) {
       final paramName = _toCamelCase(param.name ?? 'unknown');
@@ -114,11 +115,9 @@ class ReducerGenerator {
     }
     buf.writeln();
 
-    // Call reducer and return result
-    buf.writeln("    return await _reducerCaller.call('${reducer.name}', encoder.toBytes());");
+    buf.writeln("    return await _reducerCaller.call('${reducer.name}', encoder.toBytes(), optimisticChanges: optimisticChanges);");
     buf.writeln('  }');
   }
-
   /// Generate completion callback method for a reducer
   ///
   /// Example generated code:

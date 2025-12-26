@@ -27,6 +27,15 @@ class MockConnection implements SpacetimeDbConnection {
   final StreamController<ConnectionStatus> _statusController =
       StreamController<ConnectionStatus>.broadcast();
 
+  set mockStatus(ConnectionStatus newStatus) {
+    _status = newStatus;
+    _statusController.add(newStatus);
+  }
+
+  void setStatusSilently(ConnectionStatus newStatus) {
+    _status = newStatus;
+  }
+
   // Track quality
   final StreamController<ConnectionQuality> _qualityController =
       StreamController<ConnectionQuality>.broadcast();

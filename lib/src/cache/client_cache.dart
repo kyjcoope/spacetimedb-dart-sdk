@@ -236,15 +236,12 @@ class ClientCache {
   /// Returns the TableCache if linking was successful or table already exists.
   /// Returns null if the table name wasn't found.
   TableCache? linkTableId(int tableId, String tableName) {
-    // If table already exists with this ID, return it
     if (_tables.containsKey(tableId)) {
       return _tables[tableId];
     }
 
-    // Check if we have this table under a different (synthetic) ID
     final existingId = _nameToId[tableName];
     if (existingId != null && existingId != tableId) {
-      // Move the table from synthetic ID to real ID
       final table = _tables.remove(existingId);
       if (table != null) {
         _tables[tableId] = table;
@@ -253,7 +250,6 @@ class ClientCache {
       }
     }
 
-    // Table doesn't exist at all - try to activate it
     activateTable(tableId, tableName);
     return _tables[tableId];
   }
@@ -284,10 +280,44 @@ class ClientCache {
     _tables.remove(tableId);
   }
 
-  /// Unregister all tables.
-  ///
-  /// This completely resets the cache, removing all registrations and data.
   void unregisterAll() {
     _tables.clear();
   }
+
+  Map<String, List<Map<String, dynamic>>> serializeAllTables() {
+    final result = <String, List<Map<String, dynamic>>>{};
+    for (final entry in _nameToId.entries) {
+      final tableName = entry.key;
+      final tableId = entry.value;
+      final table = _tables[tableId];
+      if (table != null && table.decoder.supportsJsonSerialization) {
+        result[tableName] = table.toSerializable();
+      }
+    }
+    return result;
+  }
+
+  void loadSerializedTables(Map<String, List<Map<String, dynamic>>> data) {
+    for (final entry in data.entries) {
+      final tableName = entry.key;
+      final rows = entry.value;
+      final tableId = _nameToId[tableName];
+      if (tableId != null) {
+        final table = _tables[tableId];
+        if (table != null && table.decoder.supportsJsonSerialization) {
+          table.loadFromSerializable(rows);
+        }
+      }
+    }
+  }
+
+  List<String> get activatedTableNames => _nameToId.keys.toList();
+
+  TableCache? getTableByName(String tableName) {
+    final tableId = _nameToId[tableName];
+    if (tableId == null) return null;
+    return _tables[tableId];
+  }
+
+  Iterable<TableCache> get allTables => _tables.values;
 }

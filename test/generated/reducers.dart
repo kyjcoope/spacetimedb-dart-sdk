@@ -24,17 +24,21 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
   Future<TransactionResult> createFolder({
     required String path,
     required String name,
+    List<OptimisticChange>? optimisticChanges,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeString(path);
     encoder.writeString(name);
 
-    return await _reducerCaller.call('create_folder', encoder.toBytes());
+    return await _reducerCaller.call('create_folder', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the create_note reducer
@@ -44,17 +48,21 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
   Future<TransactionResult> createNote({
     required String title,
     required String content,
+    List<OptimisticChange>? optimisticChanges,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeString(title);
     encoder.writeString(content);
 
-    return await _reducerCaller.call('create_note', encoder.toBytes());
+    return await _reducerCaller.call('create_note', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the delete_all_folders reducer
@@ -64,12 +72,15 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
-  Future<TransactionResult> deleteAllFolders() async {
+  Future<TransactionResult> deleteAllFolders({List<OptimisticChange>? optimisticChanges}) async {
     final encoder = BsatnEncoder();
 
-    return await _reducerCaller.call('delete_all_folders', encoder.toBytes());
+    return await _reducerCaller.call('delete_all_folders', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the delete_all_notes reducer
@@ -79,12 +90,15 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
-  Future<TransactionResult> deleteAllNotes() async {
+  Future<TransactionResult> deleteAllNotes({List<OptimisticChange>? optimisticChanges}) async {
     final encoder = BsatnEncoder();
 
-    return await _reducerCaller.call('delete_all_notes', encoder.toBytes());
+    return await _reducerCaller.call('delete_all_notes', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the delete_folder reducer
@@ -94,15 +108,19 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
   Future<TransactionResult> deleteFolder({
     required String path,
+    List<OptimisticChange>? optimisticChanges,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeString(path);
 
-    return await _reducerCaller.call('delete_folder', encoder.toBytes());
+    return await _reducerCaller.call('delete_folder', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the delete_note reducer
@@ -112,15 +130,19 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
   Future<TransactionResult> deleteNote({
     required int noteId,
+    List<OptimisticChange>? optimisticChanges,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeU32(noteId);
 
-    return await _reducerCaller.call('delete_note', encoder.toBytes());
+    return await _reducerCaller.call('delete_note', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the init reducer
@@ -130,12 +152,15 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
-  Future<TransactionResult> init() async {
+  Future<TransactionResult> init({List<OptimisticChange>? optimisticChanges}) async {
     final encoder = BsatnEncoder();
 
-    return await _reducerCaller.call('init', encoder.toBytes());
+    return await _reducerCaller.call('init', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   /// Call the update_note reducer
@@ -145,19 +170,23 @@ class Reducers {
   /// - `result.energyConsumed` - Energy used (null for lightweight responses)
   /// - `result.executionDuration` - How long it took (null for lightweight responses)
   ///
+  /// Pass [optimisticChanges] to immediately update the local cache for offline-first UX.
+  /// Changes are rolled back if the server rejects them.
+  ///
   /// Throws [ReducerException] if the reducer fails or runs out of energy.
   /// Throws [TimeoutException] if the reducer doesn't complete within the timeout.
   Future<TransactionResult> updateNote({
     required int noteId,
     required String title,
     required String content,
+    List<OptimisticChange>? optimisticChanges,
   }) async {
     final encoder = BsatnEncoder();
     encoder.writeU32(noteId);
     encoder.writeString(title);
     encoder.writeString(content);
 
-    return await _reducerCaller.call('update_note', encoder.toBytes());
+    return await _reducerCaller.call('update_note', encoder.toBytes(), optimisticChanges: optimisticChanges);
   }
 
   StreamSubscription<void> onCreateFolder(void Function(EventContext ctx, String path, String name) callback) {

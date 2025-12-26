@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:logger/logger.dart';
+import 'package:meta/meta.dart';
 import 'package:spacetimedb_dart_sdk/src/cache/client_cache.dart';
 import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
 
 import '../connection/spacetimedb_connection.dart';
+import '../connection/connection_status.dart';
 import '../messages/message_decoder.dart';
 import '../messages/server_messages.dart';
 import '../messages/client_messages.dart';
@@ -16,6 +18,10 @@ import '../reducers/transaction_result.dart';
 import '../events/event.dart';
 import '../events/event_context.dart';
 import '../auth/identity.dart';
+import '../offline/offline_storage.dart';
+import '../offline/sync_state.dart';
+import '../offline/pending_mutation.dart';
+import '../messages/update_status.dart';
 
 /// Manages table subscriptions and processes real-time updates from SpacetimeDB
 ///
@@ -65,14 +71,23 @@ class SubscriptionManager {
   final ReducerEmitter reducerEmitter = ReducerEmitter();
   final Logger _logger = Logger(printer: CustomLogPrinter());
 
-  // Identity and connection info
   Identity? _identity;
   String? _address;
   Uint8List? _connectionId;
 
-  // Track table names from pending subscriptions
-  // Used to activate empty tables that don't appear in InitialSubscription
   List<String> _pendingTableNames = [];
+  final Set<String> _activeSubscriptionQueries = {};
+
+  final OfflineStorage? _offlineStorage;
+  bool _offlineStorageInitialized = false;
+  bool _disposed = false;
+  bool _initialSubscriptionReceived = false;
+  final StreamController<SyncState> _syncStateController =
+      StreamController<SyncState>.broadcast();
+  final StreamController<MutationSyncResult> _mutationSyncResultController =
+      StreamController<MutationSyncResult>.broadcast();
+  SyncState _currentSyncState = const SyncState();
+  int _cachedPendingCount = 0;
 
   final _initialSubscriptionController =
       StreamController<InitialSubscriptionMessage>.broadcast();
@@ -98,9 +113,78 @@ class SubscriptionManager {
       StreamController<ProcedureResultMessage>.broadcast();
 
   StreamSubscription<Uint8List>? _messageSubscription;
-  SubscriptionManager(this._connection) {
-    reducers = ReducerCaller(_connection);
+  StreamSubscription<ConnectionStatus>? _connectionStatusSubscription;
+
+  SubscriptionManager(this._connection, {OfflineStorage? offlineStorage})
+      : _offlineStorage = offlineStorage {
+    reducers = ReducerCaller(_connection, offlineStorage: offlineStorage);
+    reducers.onMutationQueued = _onMutationQueued;
+    reducers.onOptimisticChanges = _onOptimisticChanges;
+    reducers.onRollbackOptimistic = _onRollbackOptimistic;
     _startListening();
+    _startConnectionMonitoring();
+  }
+
+  void _onMutationQueued(String requestId, List<OptimisticChange>? changes) {
+    print('🔍 [SUB_MGR] _onMutationQueued called: requestId=$requestId, changes=${changes?.length ?? 0}');
+    _cachedPendingCount++;
+    _updateSyncState(_currentSyncState.copyWith(
+      pendingCount: _cachedPendingCount,
+    ));
+  }
+
+  void _onOptimisticChanges(String requestId, List<OptimisticChange>? changes) {
+    _applyOptimisticChanges(requestId, changes);
+    _persistTableSnapshots();
+  }
+
+  void _onRollbackOptimistic(String requestId) {
+    _logger.w('Rolling back optimistic changes for request $requestId due to timeout/failure');
+    _rollbackOptimisticChanges(requestId, null);
+    _persistTableSnapshots();
+  }
+
+  void _startConnectionMonitoring() {
+    if (_offlineStorage == null) return;
+
+    _connectionStatusSubscription =
+        _connection.connectionStatus.listen((status) {
+      if (status == ConnectionStatus.connected) {
+        _onReconnected();
+      } else if (status == ConnectionStatus.disconnected) {
+        _initialSubscriptionReceived = false;
+      }
+    });
+  }
+
+  Future<void> _onReconnected() async {
+    if (_activeSubscriptionQueries.isNotEmpty) {
+      _logger.i('Re-subscribing to ${_activeSubscriptionQueries.length} queries...');
+      final message = SubscribeMessage(_activeSubscriptionQueries.toList());
+      _connection.send(message.encode());
+    }
+
+    if (!_initialSubscriptionReceived) {
+      _logger.i('Waiting for InitialSubscription before sync...');
+      await onInitialSubscription.first;
+    }
+
+    _logger.i('Syncing pending mutations...');
+    await syncPendingMutations();
+  }
+
+  Stream<SyncState> get onSyncStateChanged => _syncStateController.stream;
+  Stream<MutationSyncResult> get onMutationSyncResult => _mutationSyncResultController.stream;
+  SyncState get syncState => _currentSyncState;
+  bool get hasOfflineStorage => _offlineStorage != null;
+
+  @visibleForTesting
+  Set<String> get activeSubscriptionQueries => _activeSubscriptionQueries;
+
+  void _updateSyncState(SyncState state) {
+    if (_disposed) return;
+    _currentSyncState = state;
+    _syncStateController.add(state);
   }
 
   Stream<InitialSubscriptionMessage> get onInitialSubscription =>
@@ -143,6 +227,7 @@ class SubscriptionManager {
 
   /// Handle incoming binary messages
   void _handleMessage(Uint8List bytes) {
+    if (_disposed) return;
     try {
       final message = MessageDecoder.decode(bytes);
       _routeMessage(message);
@@ -153,6 +238,7 @@ class SubscriptionManager {
 
   /// Route decoded messages to appropriate streams
   void _routeMessage(ServerMessage message) {
+    if (_disposed) return;
     switch (message) {
       case IdentityTokenMessage():
         // Store identity and address for public access
@@ -163,8 +249,11 @@ class SubscriptionManager {
             .join();
         _identityTokenController.add(message);
       case InitialSubscriptionMessage():
-        _handleInitialSubscription(message);
-        _initialSubscriptionController.add(message);
+        _handleInitialSubscription(message).then((_) {
+          if (_disposed) return;
+          _initialSubscriptionReceived = true;
+          _initialSubscriptionController.add(message);
+        });
       case TransactionUpdateMessage():
         _handleTransactionUpdate(message);
         _transactionUpdateController.add(message);
@@ -188,13 +277,13 @@ class SubscriptionManager {
     }
   }
 
-  void _handleInitialSubscription(InitialSubscriptionMessage message) {
+  Future<void> _handleInitialSubscription(InitialSubscriptionMessage message) async {
     _logger.i('Handling InitialSubscription with ${message.tableUpdates.length} table updates');
 
-    // Phase 1: Activate all tables that have data (link decoders to runtime IDs)
+    // Phase 1: Link tables to server IDs (preserving existing TableCache instances from offline cache)
     for (final tableUpdate in message.tableUpdates) {
-      _logger.i('  Activating table "${tableUpdate.tableName}" with ID ${tableUpdate.tableId}');
-      cache.activateTable(tableUpdate.tableId, tableUpdate.tableName);
+      _logger.i('  Linking table "${tableUpdate.tableName}" to ID ${tableUpdate.tableId}');
+      cache.linkTableId(tableUpdate.tableId, tableUpdate.tableName);
     }
 
     // Phase 1.5: Activate empty tables that weren't included in tableUpdates
@@ -218,21 +307,50 @@ class SubscriptionManager {
       event: event,
     );
 
-    // Phase 3: Process the data with context
+    // Phase 3: Clear zombie rows from ALL cached tables
+    // Tables not in server response are empty - clear them too
+    final serverTableNames = message.tableUpdates.map((t) => t.tableName).toSet();
+    for (final table in cache.allTables) {
+      if (!serverTableNames.contains(table.tableName)) {
+        table.clearNonOptimisticRows();
+      }
+    }
+
+    // Phase 4: Process the data with context
     for (final tableUpdate in message.tableUpdates) {
       if (!cache.hasTable(tableUpdate.tableId)) {
-        // Table not registered - ignore silently (decoder wasn't registered)
         continue;
       }
 
       final table = cache.getTable(tableUpdate.tableId);
       _logger.i('  Table ${tableUpdate.tableId} ("${tableUpdate.tableName}"): ${tableUpdate.updates.length} updates');
 
+      table.clearNonOptimisticRows();
+
       for (final update in tableUpdate.updates) {
         final rows = update.update.inserts.getRows();
         _logger.i('    Inserting ${rows.length} rows');
         table.applyInitialData(update.update.inserts, context);
       }
+    }
+
+    await _persistTableSnapshots();
+  }
+
+  Future<void> _persistTableSnapshots() async {
+    final storage = _offlineStorage;
+    if (storage == null || _disposed) return;
+    try {
+      for (final tableName in cache.activatedTableNames) {
+        final table = cache.getTableByName(tableName);
+        if (table != null && table.decoder.supportsJsonSerialization) {
+          final rows = table.toSerializable();
+          await storage.saveTableSnapshot(tableName, rows);
+          await storage.setLastSyncTime(tableName, DateTime.now());
+        }
+      }
+    } catch (e) {
+      _logger.e('Error persisting table snapshots: $e');
     }
   }
 
@@ -241,9 +359,14 @@ class SubscriptionManager {
     // 1. Complete pending reducer Future (if we initiated this call)
     // 2. Update table cache and emit events (always happens)
 
+    // Get UUID before completing request (completeRequest removes it)
+    final numericRequestId = message.reducerCall.requestId;
+    final uuidRequestId = reducers.getUuidForRequest(numericRequestId);
+    final effectiveRequestId = uuidRequestId ?? numericRequestId.toString();
+
     // Route to ReducerCaller first (completes Future if request_id matches)
     final result = TransactionResult.fromTransactionUpdate(message);
-    reducers.completeRequest(message.reducerCall.requestId, result);
+    reducers.completeRequest(numericRequestId, result);
 
     // Then handle table updates and events
     // Create Event from transaction message
@@ -288,28 +411,47 @@ class SubscriptionManager {
       _logger.i('Emitted reducer completion event for: ${event.reducerName}');
     }
 
-    // 5. Apply table updates with context
+    // 5. Apply table updates with context and collect touched keys
+    final touchedKeysByTable = <String, Set<dynamic>>{};
     for (final tableUpdate in message.tableUpdates) {
-      // Try to link table ID (handles empty tables that were activated by name)
       final table = cache.linkTableId(tableUpdate.tableId, tableUpdate.tableName);
       if (table == null) continue;
 
+      final touchedKeys = <dynamic>{};
       for (final update in tableUpdate.updates) {
-        table.applyTransactionUpdate(
+        final keys = table.applyTransactionUpdateAndCollectKeys(
           update.update.deletes,
           update.update.inserts,
-          context, // Pass context to table cache
+          context,
         );
+        touchedKeys.addAll(keys);
       }
+      touchedKeysByTable[tableUpdate.tableName] = touchedKeys;
     }
+
+    // 6. Touch-based optimistic confirmation/rollback
+    // Use effectiveRequestId which is UUID for offline mutations, numeric string for online
+    if (message.status is Committed) {
+      _confirmOptimisticChangesWithTouchedKeys(effectiveRequestId, touchedKeysByTable);
+    } else {
+      _rollbackOptimisticChanges(effectiveRequestId, null);
+    }
+
+    // 7. Persist cache to disk after transaction
+    _persistTableSnapshots();
   }
 
   void _handleTransactionUpdateLight(TransactionUpdateLightMessage message) {
     // DUAL DISPATCH: Handle both reducer completion and table updates
 
+    // Get UUID before completing request (completeRequest removes it)
+    final numericRequestId = message.requestId;
+    final uuidRequestId = reducers.getUuidForRequest(numericRequestId);
+    final effectiveRequestId = uuidRequestId ?? numericRequestId.toString();
+
     // Route to ReducerCaller first (completes Future if request_id matches)
     final result = TransactionResult.fromTransactionUpdateLight(message);
-    reducers.completeRequest(message.requestId, result);
+    reducers.completeRequest(numericRequestId, result);
 
     // Then handle table updates
     // Light messages don't include reducer info, so create UnknownTransactionEvent
@@ -319,20 +461,29 @@ class SubscriptionManager {
       event: event,
     );
 
-    // 3. Apply table updates
+    // Apply table updates and collect touched keys
+    final touchedKeysByTable = <String, Set<dynamic>>{};
     for (final tableUpdate in message.tableUpdates) {
-      // Try to link table ID (handles empty tables that were activated by name)
       final table = cache.linkTableId(tableUpdate.tableId, tableUpdate.tableName);
       if (table == null) continue;
 
+      final touchedKeys = <dynamic>{};
       for (final update in tableUpdate.updates) {
-        table.applyTransactionUpdate(
+        final keys = table.applyTransactionUpdateAndCollectKeys(
           update.update.deletes,
           update.update.inserts,
           context,
         );
+        touchedKeys.addAll(keys);
       }
+      touchedKeysByTable[tableUpdate.tableName] = touchedKeys;
     }
+
+    // Light messages only come for successful transactions, so use touch-based confirm
+    _confirmOptimisticChangesWithTouchedKeys(effectiveRequestId, touchedKeysByTable);
+
+    // Persist cache to disk after transaction
+    _persistTableSnapshots();
   }
 
   /// Subscribes to tables using SQL queries
@@ -347,13 +498,12 @@ class SubscriptionManager {
   /// // Data is now available in cache
   /// ```
   Future<void> subscribe(List<String> queries) async {
-    // Extract table names from queries for activation tracking
+    _activeSubscriptionQueries.addAll(queries);
     _pendingTableNames = _extractTableNames(queries);
 
     final message = SubscribeMessage(queries);
     _connection.send(message.encode());
 
-    // Wait for the initial subscription data to arrive
     await onInitialSubscription.first;
   }
 
@@ -502,17 +652,253 @@ class SubscriptionManager {
     _connection.send(message.encode());
   }
 
-  /// Disposes all resources and closes all streams
-  ///
-  /// Call this when you're done with the SubscriptionManager to clean up resources.
-  ///
-  /// Example:
-  /// ```dart
-  /// subscriptionManager.dispose();
-  /// await connection.disconnect();
-  /// ```
-  void dispose() {
+  Future<void> _ensureOfflineStorageInitialized() async {
+    if (_offlineStorageInitialized) return;
+    final storage = _offlineStorage;
+    if (storage == null) return;
+    await storage.initialize();
+    _offlineStorageInitialized = true;
+  }
+
+  Future<void> loadFromOfflineCache() async {
+    final storage = _offlineStorage;
+    if (storage == null) return;
+
+    try {
+      await _ensureOfflineStorageInitialized();
+
+      for (final tableName in cache.registeredTableNames) {
+        final rows = await storage.loadTableSnapshot(tableName);
+        if (rows != null && rows.isNotEmpty) {
+          cache.activateEmptyTable(tableName);
+          final table = cache.getTableByName(tableName);
+          if (table != null && table.decoder.supportsJsonSerialization) {
+            table.loadFromSerializable(rows);
+            _logger.i('Loaded ${rows.length} rows from offline cache for "$tableName"');
+          }
+        }
+      }
+
+      final pending = await storage.getPendingMutations();
+      for (final mutation in pending) {
+        _applyOptimisticChanges(mutation.requestId, mutation.optimisticChanges);
+      }
+
+      await _updatePendingCount();
+    } catch (e) {
+      _logger.e('Error loading from offline cache: $e');
+    }
+  }
+
+  void _applyOptimisticChanges(
+      String requestId, List<OptimisticChange>? changes) {
+    if (changes == null) return;
+
+    for (final change in changes) {
+      var table = cache.getTableByName(change.tableName);
+      if (table == null) {
+        if (cache.hasBuilder(change.tableName)) {
+          cache.activateEmptyTable(change.tableName);
+          table = cache.getTableByName(change.tableName);
+          print('🔍 [OPT] Auto-activated table "${change.tableName}" for optimistic change');
+        } else {
+          print('⚠️ [OPT] Table "${change.tableName}" not found and no builder registered');
+          continue;
+        }
+      }
+      if (table == null || !table.decoder.supportsJsonSerialization) continue;
+
+      switch (change.type) {
+        case OptimisticChangeType.insert:
+          final row = table.decoder.fromJson(change.newRowJson!);
+          if (row != null) {
+            table.applyOptimisticInsert(requestId, row);
+          }
+          break;
+        case OptimisticChangeType.update:
+          final oldRow = table.decoder.fromJson(change.oldRowJson!);
+          final newRow = table.decoder.fromJson(change.newRowJson!);
+          if (oldRow != null && newRow != null) {
+            table.applyOptimisticUpdate(requestId, oldRow, newRow);
+          }
+          break;
+        case OptimisticChangeType.delete:
+          final row = table.decoder.fromJson(change.oldRowJson!);
+          if (row != null) {
+            table.applyOptimisticDelete(requestId, row);
+          }
+          break;
+      }
+    }
+  }
+
+  void _rollbackOptimisticChanges(
+      String requestId, List<OptimisticChange>? changes) {
+    if (changes != null) {
+      for (final change in changes) {
+        final table = cache.getTableByName(change.tableName);
+        if (table == null) continue;
+        table.rollbackOptimisticChange(requestId);
+      }
+    } else {
+      for (final table in cache.allTables) {
+        table.rollbackOptimisticChange(requestId);
+      }
+    }
+  }
+
+  void _confirmOptimisticChangesWithTouchedKeys(
+      String requestId, Map<String, Set<dynamic>> touchedKeysByTable) {
+    print('🔍 [SDK] _confirmOptimisticChangesWithTouchedKeys');
+    print('🔍 [SDK]   requestId: "$requestId"');
+    for (final entry in touchedKeysByTable.entries) {
+      print('🔍 [SDK]   Table "${entry.key}" touched keys: ${entry.value.map((k) => '"$k"').toList()}');
+      final table = cache.getTableByName(entry.key);
+      if (table == null) continue;
+      table.confirmOrRollbackOptimisticChange(requestId, entry.value);
+    }
+
+    for (final table in cache.allTables) {
+      if (!touchedKeysByTable.containsKey(table.tableName)) {
+        table.confirmOrRollbackOptimisticChange(requestId, {});
+      }
+    }
+  }
+
+  Future<void> _updatePendingCount() async {
+    final storage = _offlineStorage;
+    if (storage == null) return;
+    final pending = await storage.getPendingMutations();
+    _cachedPendingCount = pending.length;
+    _updateSyncState(_currentSyncState.copyWith(
+      pendingCount: _cachedPendingCount,
+    ));
+  }
+
+  void _decrementPendingCount() {
+    _cachedPendingCount = (_cachedPendingCount - 1).clamp(0, _cachedPendingCount);
+    _updateSyncState(_currentSyncState.copyWith(
+      pendingCount: _cachedPendingCount,
+    ));
+  }
+
+  Future<void> syncPendingMutations() async {
+    final storage = _offlineStorage;
+    if (storage == null) return;
+    if (_disposed) return;
+    if (_connection.status != ConnectionStatus.connected) return;
+
+    await _ensureOfflineStorageInitialized();
+
+    final pending = await storage.getPendingMutations();
+    if (pending.isEmpty) return;
+
+    _cachedPendingCount = pending.length;
+    _updateSyncState(_currentSyncState.copyWith(
+      status: SyncStatus.syncing,
+      pendingCount: _cachedPendingCount,
+    ));
+
+    _logger.i('Syncing ${pending.length} pending mutations');
+
+    for (final mutation in pending) {
+      if (_disposed) return;
+      if (_connection.status != ConnectionStatus.connected) {
+        _logger.i('Connection lost during sync. Pausing queue.');
+        break;
+      }
+
+      try {
+        final result = await reducers.callWithBytes(
+          mutation.reducerName,
+          mutation.encodedArgs,
+          requestId: mutation.requestId,
+        );
+
+        if (_disposed) return;
+
+        if (result.isSuccess) {
+          await storage.dequeueMutation(mutation.requestId);
+          _decrementPendingCount();
+          _logger.i('Synced mutation: ${mutation.reducerName}');
+          if (!_disposed) {
+            _mutationSyncResultController.add(MutationSyncResult(
+              requestId: mutation.requestId,
+              reducerName: mutation.reducerName,
+              success: true,
+            ));
+          }
+        } else {
+          final errorMsg = result.errorMessage ?? 'Unknown error';
+          _rollbackOptimisticChanges(
+              mutation.requestId, mutation.optimisticChanges);
+          await storage.dequeueMutation(mutation.requestId);
+          _decrementPendingCount();
+          _logger.e('Server rejected mutation: ${mutation.reducerName} - $errorMsg');
+          if (!_disposed) {
+            _mutationSyncResultController.add(MutationSyncResult(
+              requestId: mutation.requestId,
+              reducerName: mutation.reducerName,
+              success: false,
+              error: errorMsg,
+            ));
+          }
+        }
+      } on ReducerException catch (e) {
+        _rollbackOptimisticChanges(
+            mutation.requestId, mutation.optimisticChanges);
+        await storage.dequeueMutation(mutation.requestId);
+        _decrementPendingCount();
+        _logger.e('Server rejected mutation: ${mutation.reducerName} - ${e.message}');
+        if (!_disposed) {
+          _mutationSyncResultController.add(MutationSyncResult(
+            requestId: mutation.requestId,
+            reducerName: mutation.reducerName,
+            success: false,
+            error: e.message,
+          ));
+        }
+      } catch (e) {
+        _logger.w('Network error syncing ${mutation.reducerName}: $e. Pausing queue.');
+        break;
+      }
+    }
+
+    if (_disposed) return;
+
+    final remaining = await storage.getPendingMutations();
+    _cachedPendingCount = remaining.length;
+    _updateSyncState(_currentSyncState.copyWith(
+      status: SyncStatus.idle,
+      pendingCount: _cachedPendingCount,
+      lastSyncTime: DateTime.now(),
+    ));
+  }
+
+  Future<List<PendingMutation>> getPendingMutations() async {
+    final storage = _offlineStorage;
+    if (storage == null) return [];
+    return storage.getPendingMutations();
+  }
+
+  Future<void> clearPendingMutation(String requestId) async {
+    final storage = _offlineStorage;
+    if (storage == null) return;
+    await storage.dequeueMutation(requestId);
+    await _updatePendingCount();
+  }
+
+  Future<void> clearAllPendingMutations() async {
+    final storage = _offlineStorage;
+    if (storage == null) return;
+    await storage.clearMutationQueue();
+    await _updatePendingCount();
+  }
+
+  Future<void> dispose() async {
+    _disposed = true;
     _messageSubscription?.cancel();
+    _connectionStatusSubscription?.cancel();
     _initialSubscriptionController.close();
     _transactionUpdateController.close();
     _transactionUpdateLightController.close();
@@ -524,6 +910,9 @@ class SubscriptionManager {
     _subscribeMultiAppliedController.close();
     _unsubscribeMultiAppliedController.close();
     _procedureResultController.close();
-    reducerEmitter.dispose(); // Clean up reducer event listeners
+    _syncStateController.close();
+    _mutationSyncResultController.close();
+    reducerEmitter.dispose();
+    await _offlineStorage?.dispose();
   }
 }

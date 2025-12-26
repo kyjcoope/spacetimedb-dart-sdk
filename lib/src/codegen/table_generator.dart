@@ -87,7 +87,6 @@ class TableGenerator {
       final fieldName = _toCamelCase(element.name ?? 'unknown');
 
       if (TypeMapper.isRefType(element.algebraicType)) {
-        // For Ref types, call the type's decode factory
         final typeName = TypeMapper.toDartType(
           element.algebraicType,
           typeSpace: schema.typeSpace,
@@ -103,12 +102,36 @@ class TableGenerator {
     buf.writeln('  }');
     buf.writeln();
 
+    // toJson method
+    buf.writeln('  Map<String, dynamic> toJson() {');
+    buf.writeln('    return {');
+    for (final element in productType.elements) {
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
+      final jsonValue = _getToJsonExpression(fieldName, element.algebraicType);
+      buf.writeln("      '$fieldName': $jsonValue,");
+    }
+    buf.writeln('    };');
+    buf.writeln('  }');
+    buf.writeln();
+
+    // fromJson factory
+    buf.writeln('  factory $className.fromJson(Map<String, dynamic> json) {');
+    buf.writeln('    return $className(');
+    for (final element in productType.elements) {
+      final fieldName = _toCamelCase(element.name ?? 'unknown');
+      final fromJsonExpr = _getFromJsonExpression(fieldName, element.algebraicType);
+      buf.writeln('      $fieldName: $fromJsonExpr,');
+    }
+    buf.writeln('    );');
+    buf.writeln('  }');
+    buf.writeln();
+
     // Close class
     buf.writeln('}');
     buf.writeln();
 
     // Generate Decoder class
-    buf.writeln('class ${className}Decoder implements RowDecoder<$className> {');
+    buf.writeln('class ${className}Decoder extends RowDecoder<$className> {');
     buf.writeln('  @override');
     buf.writeln('  $className decode(BsatnDecoder decoder) {');
     buf.writeln('    return $className.decodeBsatn(decoder);');
@@ -140,9 +163,112 @@ class TableGenerator {
     }
 
     buf.writeln('  }');
+    buf.writeln();
+    buf.writeln('  @override');
+    buf.writeln('  Map<String, dynamic>? toJson($className row) => row.toJson();');
+    buf.writeln();
+    buf.writeln('  @override');
+    buf.writeln('  $className? fromJson(Map<String, dynamic> json) => $className.fromJson(json);');
+    buf.writeln();
+    buf.writeln('  @override');
+    buf.writeln('  bool get supportsJsonSerialization => true;');
     buf.writeln('}');
 
     return buf.toString();
+  }
+
+  String _getToJsonExpression(String fieldName, Map<String, dynamic> algebraicType) {
+    if (_isTimestamp(algebraicType)) {
+      return '$fieldName.toInt()';
+    }
+    if (algebraicType.containsKey('U64') || algebraicType.containsKey('I64')) {
+      return '$fieldName.toInt()';
+    }
+    if (TypeMapper.isRefType(algebraicType)) {
+      return '$fieldName.toJson()';
+    }
+    if (algebraicType.containsKey('Array')) {
+      final elementType = algebraicType['Array'] as Map<String, dynamic>;
+      if (TypeMapper.isRefType(elementType)) {
+        return '$fieldName.map((e) => e.toJson()).toList()';
+      }
+      if (elementType.containsKey('U64') || elementType.containsKey('I64')) {
+        return '$fieldName.map((e) => e.toInt()).toList()';
+      }
+    }
+    return fieldName;
+  }
+
+  String _getFromJsonExpression(String fieldName, Map<String, dynamic> algebraicType) {
+    final dartType = TypeMapper.toDartType(
+      algebraicType,
+      typeSpace: schema.typeSpace,
+      typeDefs: schema.types,
+    );
+
+    if (_isTimestamp(algebraicType)) {
+      return "Int64((json['$fieldName'] as int?) ?? 0)";
+    }
+    if (algebraicType.containsKey('U64') || algebraicType.containsKey('I64')) {
+      return "Int64((json['$fieldName'] as int?) ?? 0)";
+    }
+    if (TypeMapper.isRefType(algebraicType)) {
+      return "$dartType.fromJson(json['$fieldName'] as Map<String, dynamic>)";
+    }
+    if (algebraicType.containsKey('Array')) {
+      final elementType = algebraicType['Array'] as Map<String, dynamic>;
+      final innerDartType = TypeMapper.toDartType(
+        elementType,
+        typeSpace: schema.typeSpace,
+        typeDefs: schema.types,
+      );
+      if (TypeMapper.isRefType(elementType)) {
+        return "(json['$fieldName'] as List?)?.map((e) => $innerDartType.fromJson(e as Map<String, dynamic>)).toList() ?? []";
+      }
+      if (elementType.containsKey('U64') || elementType.containsKey('I64')) {
+        return "(json['$fieldName'] as List?)?.map((e) => Int64(e as int)).toList() ?? []";
+      }
+      return "(json['$fieldName'] as List?)?.cast<$innerDartType>() ?? []";
+    }
+    if (algebraicType.containsKey('String')) {
+      return "(json['$fieldName'] as String?) ?? ''";
+    }
+    if (algebraicType.containsKey('Bool')) {
+      return "(json['$fieldName'] as bool?) ?? false";
+    }
+    if (algebraicType.containsKey('F32') || algebraicType.containsKey('F64')) {
+      return "(json['$fieldName'] as num?)?.toDouble() ?? 0.0";
+    }
+    if (_isIntType(algebraicType)) {
+      return "(json['$fieldName'] as int?) ?? 0";
+    }
+    return "json['$fieldName']";
+  }
+
+  bool _isTimestamp(Map<String, dynamic> algebraicType) {
+    if (algebraicType.containsKey('Product')) {
+      final product = algebraicType['Product'];
+      if (product is Map && product.containsKey('elements')) {
+        final elements = product['elements'] as List;
+        if (elements.length == 1) {
+          final element = elements[0];
+          if (element['name'] != null &&
+              element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  bool _isIntType(Map<String, dynamic> algebraicType) {
+    return algebraicType.containsKey('U8') ||
+        algebraicType.containsKey('U16') ||
+        algebraicType.containsKey('U32') ||
+        algebraicType.containsKey('I8') ||
+        algebraicType.containsKey('I16') ||
+        algebraicType.containsKey('I32');
   }
 
   String _toPascalCase(String input) {

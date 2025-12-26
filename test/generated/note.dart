@@ -36,9 +36,29 @@ class Note {
     );
   }
 
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'timestamp': timestamp.toInt(),
+      'status': status.toJson(),
+    };
+  }
+
+  factory Note.fromJson(Map<String, dynamic> json) {
+    return Note(
+      id: (json['id'] as int?) ?? 0,
+      title: (json['title'] as String?) ?? '',
+      content: (json['content'] as String?) ?? '',
+      timestamp: Int64((json['timestamp'] as int?) ?? 0),
+      status: NoteStatus.fromJson(json['status'] as Map<String, dynamic>),
+    );
+  }
+
 }
 
-class NoteDecoder implements RowDecoder<Note> {
+class NoteDecoder extends RowDecoder<Note> {
   @override
   Note decode(BsatnDecoder decoder) {
     return Note.decodeBsatn(decoder);
@@ -48,4 +68,13 @@ class NoteDecoder implements RowDecoder<Note> {
   int? getPrimaryKey(Note row) {
     return row.id;
   }
+
+  @override
+  Map<String, dynamic>? toJson(Note row) => row.toJson();
+
+  @override
+  Note? fromJson(Map<String, dynamic> json) => Note.fromJson(json);
+
+  @override
+  bool get supportsJsonSerialization => true;
 }

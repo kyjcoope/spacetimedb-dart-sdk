@@ -21,6 +21,9 @@ class ConnectionConfig {
   /// Enable/disable automatic reconnection
   final bool autoReconnect;
 
+  /// Timeout for initial WebSocket connection
+  final Duration connectTimeout;
+
   const ConnectionConfig({
     this.maxReconnectAttempts = 10,
     this.baseReconnectDelay = const Duration(seconds: 1),
@@ -28,6 +31,7 @@ class ConnectionConfig {
     this.pingInterval = const Duration(seconds: 30),
     this.pongTimeout = const Duration(seconds: 10),
     this.autoReconnect = true,
+    this.connectTimeout = const Duration(seconds: 10),
   });
 
   /// Preset for mobile networks (more aggressive reconnection)
@@ -40,6 +44,7 @@ class ConnectionConfig {
     maxReconnectDelay: Duration(seconds: 15),
     pingInterval: Duration(seconds: 15),
     pongTimeout: Duration(seconds: 5),
+    connectTimeout: Duration(seconds: 15),
   );
 
   /// Preset for stable connections (less aggressive)
@@ -52,6 +57,7 @@ class ConnectionConfig {
     maxReconnectDelay: Duration(minutes: 1),
     pingInterval: Duration(minutes: 1),
     pongTimeout: Duration(seconds: 15),
+    connectTimeout: Duration(seconds: 10),
   );
 
   /// Preset for development (no reconnection, immediate feedback)
@@ -63,6 +69,7 @@ class ConnectionConfig {
     autoReconnect: false,
     pingInterval: Duration(seconds: 30),
     pongTimeout: Duration(seconds: 10),
+    connectTimeout: Duration(seconds: 10),
   );
 
   @override
@@ -72,6 +79,7 @@ class ConnectionConfig {
         'maxReconnectDelay: $maxReconnectDelay, '
         'pingInterval: $pingInterval, '
         'pongTimeout: $pongTimeout, '
-        'autoReconnect: $autoReconnect)';
+        'autoReconnect: $autoReconnect, '
+        'connectTimeout: $connectTimeout)';
   }
 }

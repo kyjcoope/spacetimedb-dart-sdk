@@ -42,6 +42,8 @@ void main() {
             return;
           case UnknownTransactionEvent():
             return;
+          case OptimisticEvent():
+            return;
         }
       }
 
@@ -55,6 +57,7 @@ void main() {
       ));
       testEvent(SubscribeAppliedEvent());
       testEvent(UnknownTransactionEvent());
+      testEvent(OptimisticEvent(requestId: 'test-123'));
     });
   });
 
@@ -80,11 +83,13 @@ void main() {
           Committed() => 'success',
           Failed(:final message) => 'failed: $message',
           OutOfEnergy(:final budgetInfo) => 'out of energy: $budgetInfo',
+          Pending() => 'pending',
         };
       }
 
       expect(handleStatus(Committed()), equals('success'));
       expect(handleStatus(Failed('error')), equals('failed: error'));
+      expect(handleStatus(Pending()), equals('pending'));
       expect(
         handleStatus(OutOfEnergy('budget')),
         equals('out of energy: budget'),

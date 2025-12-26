@@ -81,9 +81,9 @@ void main() {
         reason: 'Client should wait for initial subscription data with timeout',
       );
       expect(
-        clientCode.contains('// Wait for initial subscription data to load with timeout'),
+        clientCode.contains('subscriptionManager.subscribe(initialSubscriptions).timeout(subscriptionTimeout)'),
         true,
-        reason: 'Should have explanatory comment for timeout',
+        reason: 'Should have timeout in subscription call',
       );
       print('   ✅ Client waits for initial subscription with timeout');
 
@@ -155,7 +155,7 @@ void main() {
         );
 
         expect(
-          tableFile.content.contains('class ${className}Decoder implements RowDecoder<$className>'),
+          tableFile.content.contains('class ${className}Decoder extends RowDecoder<$className>'),
           true,
           reason: '${className}Decoder should exist',
         );

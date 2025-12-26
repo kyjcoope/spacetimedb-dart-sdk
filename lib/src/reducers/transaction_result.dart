@@ -33,11 +33,13 @@ class TransactionResult {
   /// The reducer name (null for TransactionUpdateLight)
   final String? reducerName;
 
-  /// The reducer ID (null for TransactionUpdateLight)
   final int? reducerId;
 
-  /// Whether this was a lightweight update (no reducer metadata)
   final bool isLightUpdate;
+
+  final bool isPending;
+
+  final String? pendingRequestId;
 
   TransactionResult({
     required this.status,
@@ -47,7 +49,22 @@ class TransactionResult {
     this.reducerName,
     this.reducerId,
     this.isLightUpdate = false,
+    this.isPending = false,
+    this.pendingRequestId,
   });
+
+  factory TransactionResult.pending({
+    required String reducerName,
+    required String requestId,
+  }) {
+    return TransactionResult(
+      status: Pending(),
+      timestamp: DateTime.now(),
+      reducerName: reducerName,
+      isPending: true,
+      pendingRequestId: requestId,
+    );
+  }
 
   /// Create result from a full TransactionUpdate message
   factory TransactionResult.fromTransactionUpdate(
@@ -80,7 +97,16 @@ class TransactionResult {
   }
 
   /// Whether the transaction was committed successfully
+  ///
+  /// Note: Returns false for pending (queued offline) mutations.
+  /// Use [isSuccessOrPending] if you want to treat queued mutations as success.
   bool get isSuccess => status is Committed;
+
+  /// Whether the transaction was committed or queued for later sync
+  ///
+  /// Use this when you want to treat offline-queued mutations as successful.
+  /// The mutation will be synced when connectivity is restored.
+  bool get isSuccessOrPending => status is Committed || status is Pending;
 
   /// Whether the transaction failed
   bool get isFailed => status is Failed;

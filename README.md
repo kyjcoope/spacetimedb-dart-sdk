@@ -16,6 +16,7 @@ Dart SDK for SpacetimeDB with WebSocket sync, BSATN encoding, and code generatio
 - Code generation (tables, reducers, sum types, views)
 - Authentication with OIDC and token persistence
 - Transaction events with context
+- Offline-first support with optimistic updates and mutation queue
 
 ## Quick Start
 
@@ -202,12 +203,47 @@ client.connection.connectionQuality.listen((quality) {
 ## SSL
 
 ```dart
-// Development - ws:// and http://
-ssl: false
-
-// Production - wss:// and https://
-ssl: true
+ssl: false  // Development: ws://, http://
+ssl: true   // Production: wss://, https://
 ```
+
+## Offline Support
+
+```dart
+final client = await SpacetimeDbClient.connect(
+  host: 'localhost:3000',
+  database: 'myapp',
+  offlineStorage: JsonFileStorage(basePath: '/path/to/cache'),
+  onCacheLoaded: (client) => print('Loaded ${client.notes.count} cached notes'),
+);
+```
+
+Storage options: `JsonFileStorage` (file-based), `InMemoryOfflineStorage` (testing), or implement `OfflineStorage` interface for custom backends.
+
+### Optimistic Updates
+
+```dart
+// Insert with immediate UI update
+await client.reducers.createNote(
+  id: uuid.v4(), // Client-side IDs required for optimistic inserts
+  title: 'New Note',
+  optimisticChanges: [OptimisticChange.insert('note', note.toJson())],
+);
+
+// Update/delete
+optimisticChanges: [OptimisticChange.update('note', oldRow.toJson(), newRow.toJson())]
+optimisticChanges: [OptimisticChange.delete('note', row.toJson())]
+```
+
+### Sync State
+
+```dart
+print(client.syncState.pendingCount);  // Queued mutations
+client.onSyncStateChanged.listen((state) => showSyncIndicator(state.hasPending));
+client.onMutationSyncResult.listen((r) => r.success ? null : showError(r.error));
+```
+
+Offline behavior: cached data loads instantly, mutations queue locally, optimistic changes update UI, queued mutations replay on reconnect, failed mutations roll back.
 
 ## Testing
 

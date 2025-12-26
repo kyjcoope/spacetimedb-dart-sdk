@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 
 // Simple mock decoder for testing
-class MockDecoder implements RowDecoder<String> {
+class MockDecoder extends RowDecoder<String> {
   @override
   String decode(BsatnDecoder decoder) => 'mock';
 

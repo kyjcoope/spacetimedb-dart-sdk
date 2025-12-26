@@ -45,3 +45,9 @@ export 'src/auth/auth_token_store.dart';
 export 'src/auth/in_memory_token_store.dart';
 export 'src/auth/oidc_helper.dart';
 export 'src/auth/identity.dart';
+
+// Offline support
+export 'src/offline/offline_storage.dart';
+export 'src/offline/pending_mutation.dart';
+export 'src/offline/sync_state.dart';
+export 'src/offline/impl/json_file_storage.dart';

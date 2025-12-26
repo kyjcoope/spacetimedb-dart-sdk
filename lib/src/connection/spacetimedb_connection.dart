@@ -23,8 +23,9 @@ import 'websocket.dart' as ws;
 typedef WebSocketFactory = WebSocketChannel Function(
   Uri uri,
   Iterable<String>? protocols,
-  Map<String, dynamic>? headers,
-);
+  Map<String, dynamic>? headers, {
+  Duration connectTimeout,
+});
 
 /// WebSocket connection to a SpacetimeDB database
 ///
@@ -209,6 +210,7 @@ class SpacetimeDbConnection {
         uri,
         ['v1.bsatn.spacetimedb'],
         headers,
+        connectTimeout: config.connectTimeout,
       );
       await _channel!.ready;
       _setupMessageListener();
@@ -225,6 +227,14 @@ class SpacetimeDbConnection {
       _updateStatus(ConnectionStatus.disconnected);
 
       _channel = null;
+
+      final errorString = e.toString();
+      if (errorString.contains('401') || errorString.contains('Unauthorized')) {
+        throw SpacetimeDbAuthException(
+          'Authentication failed (401). Token may be invalid or expired.',
+        );
+      }
+
       rethrow;
     }
   }
@@ -541,4 +551,13 @@ class SpacetimeDbConnection {
     await _messageController.close();
     await _errorController.close();
   }
+}
+
+class SpacetimeDbAuthException implements Exception {
+  final String message;
+
+  SpacetimeDbAuthException(this.message);
+
+  @override
+  String toString() => 'SpacetimeDbAuthException: $message';
 }

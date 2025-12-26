@@ -285,7 +285,7 @@ void main() {
               failureCompleter.complete();
             }
           case OutOfEnergy():
-            // handle out of energy
+          case Pending():
             break;
         }
       });

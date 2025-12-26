@@ -4,7 +4,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 WebSocketChannel connectWebSocket(
   Uri uri,
   Iterable<String>? protocols,
-  Map<String, dynamic>? headers,
-) {
+  Map<String, dynamic>? headers, {
+  Duration connectTimeout = const Duration(seconds: 10),
+}) {
   throw UnsupportedError('No WebSocket implementation for this platform');
 }

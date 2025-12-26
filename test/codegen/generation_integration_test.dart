@@ -61,12 +61,12 @@ void main() {
       expect(reducersContent, contains('Future<TransactionResult> createNote({'));
       expect(reducersContent, contains('required String title,'));
       expect(reducersContent, contains('required String content,'));
-      expect(reducersContent, contains('Future<TransactionResult> init()'));
+      expect(reducersContent, contains('Future<TransactionResult> init({List<OptimisticChange>? optimisticChanges}) async {'));
       expect(reducersContent, contains('Future<TransactionResult> updateNote({'));
       expect(reducersContent, contains('required int noteId,'));
-      expect(reducersContent, contains("return await _reducerCaller.call('create_note', encoder.toBytes())"));
-      expect(reducersContent, contains("return await _reducerCaller.call('init', encoder.toBytes())"));
-      expect(reducersContent, contains("return await _reducerCaller.call('update_note', encoder.toBytes())"));
+      expect(reducersContent, contains("return await _reducerCaller.call('create_note', encoder.toBytes(), optimisticChanges: optimisticChanges)"));
+      expect(reducersContent, contains("return await _reducerCaller.call('init', encoder.toBytes(), optimisticChanges: optimisticChanges)"));
+      expect(reducersContent, contains("return await _reducerCaller.call('update_note', encoder.toBytes(), optimisticChanges: optimisticChanges)"));
 
       // Verify client.dart content
       final clientContent = await clientFile.readAsString();

@@ -29,19 +29,24 @@ import 'event.dart';
 /// });
 /// ```
 class EventContext {
-  /// The current client's connection ID (16 bytes)
-  ///
-  /// Used for checking if the transaction was initiated by the current client.
-  /// Will be null until the IdentityToken message is received.
   final Uint8List? _myConnectionId;
-
-  /// The event that triggered this context
   final Event event;
+  final bool isOptimistic;
+  final String? pendingRequestId;
 
   EventContext({
     required Uint8List? myConnectionId,
     required this.event,
+    this.isOptimistic = false,
+    this.pendingRequestId,
   }) : _myConnectionId = myConnectionId;
+
+  EventContext.optimistic({
+    required String requestId,
+  })  : _myConnectionId = null,
+        event = OptimisticEvent(requestId: requestId),
+        isOptimistic = true,
+        pendingRequestId = requestId;
 
   /// 🌟 GOLD STANDARD: DX Helper - Check if this event was triggered by current client
   ///
@@ -66,16 +71,15 @@ class EventContext {
   /// });
   /// ```
   bool get isMyTransaction {
-    // Only ReducerEvents have caller connection IDs
+    if (isOptimistic) return true;
+
     if (event is! ReducerEvent) return false;
 
     final reducerEvent = event as ReducerEvent;
     final callerConnectionId = reducerEvent.callerConnectionId;
 
-    // Handle null cases
     if (_myConnectionId == null || callerConnectionId == null) return false;
 
-    // Compare byte arrays for equality
     return _bytesEqual(_myConnectionId, callerConnectionId);
   }
 

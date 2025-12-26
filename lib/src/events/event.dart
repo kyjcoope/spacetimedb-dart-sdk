@@ -83,10 +83,10 @@ class ReducerEvent extends Event {
 /// It represents the "baseline" data state before any transactions occur.
 class SubscribeAppliedEvent extends Event {}
 
-/// Event from an unknown transaction source
-///
-/// This occurs when:
-/// - Transaction metadata is missing or incomplete
-/// - Server sent a transaction without reducer info
-/// - Scheduled reducers or system operations
 class UnknownTransactionEvent extends Event {}
+
+class OptimisticEvent extends Event {
+  final String requestId;
+
+  OptimisticEvent({required this.requestId});
+}

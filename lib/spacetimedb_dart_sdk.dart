@@ -51,3 +51,6 @@ export 'src/offline/offline_storage.dart';
 export 'src/offline/pending_mutation.dart';
 export 'src/offline/sync_state.dart';
 export 'src/offline/impl/json_file_storage.dart';
+
+// Utils
+export 'src/utils/sdk_logger.dart';

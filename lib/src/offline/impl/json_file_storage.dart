@@ -2,11 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:logger/logger.dart';
-
 import '../offline_storage.dart';
 import '../pending_mutation.dart';
-import '../../utils/custom_log_printer.dart';
+import '../../utils/sdk_logger.dart';
 
 class _AsyncLock {
   Completer<void>? _completer;
@@ -28,7 +26,6 @@ class _AsyncLock {
 
 class JsonFileStorage implements OfflineStorage {
   final String basePath;
-  final Logger _logger = Logger(printer: CustomLogPrinter());
 
   Directory? _baseDir;
   File? _mutationsFile;
@@ -47,7 +44,7 @@ class JsonFileStorage implements OfflineStorage {
 
   Future<T> _tracked<T>(Future<T> Function() operation) async {
     if (_disposed) {
-      _logger.w('Operation attempted after dispose, ignoring');
+      SdkLogger.w('Operation attempted after dispose, ignoring');
       throw StateError('Storage has been disposed');
     }
     _pendingOperations++;
@@ -90,7 +87,7 @@ class JsonFileStorage implements OfflineStorage {
           try {
             await entity.rename(originalPath);
           } catch (e) {
-            _logger.e('Failed to recover temp file: $e');
+            SdkLogger.e('Failed to recover temp file: $e');
           }
         } else {
           try {
@@ -123,17 +120,17 @@ class JsonFileStorage implements OfflineStorage {
       try {
         return await file.readAsString();
       } catch (e) {
-        _logger.e('Failed to read ${file.path}: $e');
+        SdkLogger.e('Failed to read ${file.path}: $e');
       }
     }
 
     final backupFile = File('${file.path}.bak');
     if (await backupFile.exists()) {
       try {
-        _logger.i('Recovering from backup: ${backupFile.path}');
+        SdkLogger.i('Recovering from backup: ${backupFile.path}');
         return await backupFile.readAsString();
       } catch (e) {
-        _logger.e('Failed to read backup ${backupFile.path}: $e');
+        SdkLogger.e('Failed to read backup ${backupFile.path}: $e');
       }
     }
 
@@ -170,7 +167,7 @@ class JsonFileStorage implements OfflineStorage {
         await _cleanupBackup(file);
         return data.cast<Map<String, dynamic>>();
       } catch (e) {
-        _logger.e('Failed to parse table snapshot for "$tableName": $e');
+        SdkLogger.e('Failed to parse table snapshot for "$tableName": $e');
         return null;
       }
     });
@@ -219,7 +216,7 @@ class JsonFileStorage implements OfflineStorage {
           .map((e) => PendingMutation.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      _logger.e('Failed to parse pending mutations: $e');
+      SdkLogger.e('Failed to parse pending mutations: $e');
       return [];
     }
   }
@@ -270,7 +267,7 @@ class JsonFileStorage implements OfflineStorage {
       final data = jsonDecode(content) as Map<String, dynamic>;
       return data.cast<String, String>();
     } catch (e) {
-      _logger.e('Failed to parse sync times: $e');
+      SdkLogger.e('Failed to parse sync times: $e');
       return {};
     }
   }

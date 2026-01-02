@@ -5,14 +5,13 @@ import 'dart:math' show Random;
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_state.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_status.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_quality.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/connection_config.dart';
 import 'package:spacetimedb_dart_sdk/src/connection/keep_alive_monitor.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/client_messages.dart';
-import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/sdk_logger.dart';
 import 'platform.dart' show kIsWeb;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -65,7 +64,6 @@ class SpacetimeDbConnection {
   final ConnectionConfig config;
   final WebSocketFactory _socketFactory;
 
-  final Logger _logger = Logger(printer: CustomLogPrinter());
   static final _rng = Random.secure();
 
   int _reconnectAttempts = 0;
@@ -145,7 +143,7 @@ class SpacetimeDbConnection {
   /// is received from the server.
   void updateToken(String token) {
     _currentToken = token;
-    _logger.i('Authentication token updated');
+    SdkLogger.i('Authentication token updated');
   }
 
   /// Exchange auth token for a short-lived WebSocket token (for web platform)
@@ -170,18 +168,18 @@ class SpacetimeDbConnection {
         final data = jsonDecode(response.body);
         return data['token'] as String?;
       } else {
-        _logger.e('Failed to get WebSocket token: ${response.statusCode}');
+        SdkLogger.e('Failed to get WebSocket token: ${response.statusCode}');
         return null;
       }
     } catch (e) {
-      _logger.e('Error getting WebSocket token: $e');
+      SdkLogger.e('Error getting WebSocket token: $e');
       return null;
     }
   }
 
   Future<void> connect() async {
     if (_state != ConnectionState.disconnected) {
-      _logger.i('Already connected or connecting');
+      SdkLogger.i('Already connected or connecting');
       return;
     }
     _shouldReconnect = true;
@@ -220,7 +218,7 @@ class SpacetimeDbConnection {
       _reconnectAttempts = 0; // Reset on successful connection
       _updateQuality(); // Emit quality update after reconnect counter reset
     } catch (e) {
-      _logger.e('Connection failed: $e');
+      SdkLogger.e('Connection failed: $e');
 
       // FIX: Update BOTH State and Status to prevent desynchronization
       _updateState(ConnectionState.disconnected);
@@ -270,7 +268,7 @@ class SpacetimeDbConnection {
     if (_currentStatus != newStatus) {
       _currentStatus = newStatus;
       _statusController.add(newStatus);
-      _logger.i('Connection status: $newStatus');
+      SdkLogger.i('Connection status: $newStatus');
 
       if (newStatus == ConnectionStatus.connected) {
         _lastSuccessfulConnection = DateTime.now();
@@ -292,7 +290,7 @@ class SpacetimeDbConnection {
       lastPongReceived: _lastMessageReceived,
     );
 
-    _logger.i(
+    SdkLogger.i(
         'Quality update: health=${quality.healthScore.toStringAsFixed(1)} status=${quality.status.name} reconnects=${quality.reconnectAttempts}');
     _qualityController.add(quality);
   }
@@ -309,13 +307,13 @@ class SpacetimeDbConnection {
   /// ```
   void send(Uint8List data) {
     if (!isConnected) {
-      _logger.i('Cannot send: not connected');
+      SdkLogger.i('Cannot send: not connected');
       return;
     }
     // Debug: Log message type
     // if (data.isNotEmpty) {
     //   final msgType = data[0];
-    //   _logger.d('Sending message type $msgType, length ${data.length} bytes');
+    //   SdkLogger.d('Sending message type $msgType, length ${data.length} bytes');
     // }
     _channel!.sink.add(data);
   }
@@ -330,27 +328,27 @@ class SpacetimeDbConnection {
 
         if (data is Uint8List) {
           // if (data.isNotEmpty) {
-          //   _logger.d('Received message type ${data[0]}, length ${data.length} bytes');
+          //   SdkLogger.d('Received message type ${data[0]}, length ${data.length} bytes');
           // }
           _messageController.add(data);
         } else if (data is List<int>) {
           final bytes = Uint8List.fromList(data);
           // if (bytes.isNotEmpty) {
-          //   _logger.d('Received message type ${bytes[0]}, length ${bytes.length} bytes');
+          //   SdkLogger.d('Received message type ${bytes[0]}, length ${bytes.length} bytes');
           // }
           _messageController.add(bytes);
         }
       },
       onError: (error) {
         final errorMsg = 'WebSocket error: $error';
-        _logger.e(errorMsg);
+        SdkLogger.e(errorMsg);
         _lastError = errorMsg;
         _errorController.add(errorMsg);
         _updateState(ConnectionState.disconnected);
         _updateQuality();
       },
       onDone: () {
-        _logger.i('WebSocket closed');
+        SdkLogger.i('WebSocket closed');
         _keepAlive?.stop();
         _updateState(ConnectionState.disconnected);
 
@@ -382,7 +380,7 @@ class SpacetimeDbConnection {
 
     // Check for fatal error condition
     if (_reconnectAttempts >= config.maxReconnectAttempts) {
-      _logger.e('Max reconnection attempts reached. Giving up.');
+      SdkLogger.e('Max reconnection attempts reached. Giving up.');
       _updateStatus(ConnectionStatus.fatalError);
       _shouldReconnect = false;
       return;
@@ -391,7 +389,7 @@ class SpacetimeDbConnection {
     _reconnectAttempts++;
     _updateQuality(); // Emit quality update after reconnect attempt increment
     final delay = _getReconnectDelay();
-    _logger.i(
+    SdkLogger.i(
         'Reconnecting in ${delay.inSeconds}s (attempt $_reconnectAttempts/${config.maxReconnectAttempts})');
 
     _updateState(ConnectionState.reconnecting);
@@ -454,7 +452,7 @@ class SpacetimeDbConnection {
       throw StateError('Cannot retry when status is $_currentStatus');
     }
 
-    _logger.i('Manual retry initiated');
+    SdkLogger.i('Manual retry initiated');
     _reconnectAttempts = 0;
     _updateQuality(); // Emit quality update after reconnect counter reset
     _shouldReconnect = true;
@@ -510,11 +508,11 @@ class SpacetimeDbConnection {
           send(message.encode());
           _lastPingSent = DateTime.now();
         } catch (e) {
-          _logger.e('Failed to send keep-alive ping: $e');
+          SdkLogger.e('Failed to send keep-alive ping: $e');
         }
       },
       onDisconnect: () {
-        _logger.i('Keep-alive timeout - connection declared dead');
+        SdkLogger.i('Keep-alive timeout - connection declared dead');
         _handleStaleConnection();
       },
       idleThreshold: config.pingInterval,

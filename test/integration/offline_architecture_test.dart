@@ -458,7 +458,14 @@ void main() {
       final optimisticId = DateTime.now().microsecondsSinceEpoch;
       final optimisticTitle = 'Confirm-Test-$optimisticId';
 
-      final resultFuture = subManager.reducers.callWith(
+      final syncCompleter = Completer<MutationSyncResult>();
+      final syncSub = subManager.onMutationSyncResult.listen((result) {
+        if (result.reducerName == 'create_note' && !syncCompleter.isCompleted) {
+          syncCompleter.complete(result);
+        }
+      });
+
+      final result = await subManager.reducers.callWith(
         'create_note',
         (encoder) {
           encoder.writeString(optimisticTitle);
@@ -475,12 +482,14 @@ void main() {
         ],
       );
 
+      expect(result.isPending, isTrue, reason: 'Offline-first returns pending immediately');
       expect(noteTable.getRow(optimisticId), isNotNull,
           reason: 'Optimistic row should exist immediately');
 
-      final result = await resultFuture.timeout(_timeout);
+      final syncResult = await syncCompleter.future.timeout(_timeout);
+      await syncSub.cancel();
 
-      expect(result.isSuccess, isTrue, reason: 'Transaction should succeed');
+      expect(syncResult.success, isTrue, reason: 'Sync should succeed');
 
       expect(noteTable.getRow(optimisticId), isNull,
           reason: 'Optimistic placeholder row should be removed after server confirms (server assigns different ID)');
@@ -493,10 +502,10 @@ void main() {
       await setup();
       addTearDown(cleanup);
 
-      final createCompleter = Completer<void>();
-      final createSub = subManager.reducerEmitter.on('create_note').listen((_) {
-        if (!createCompleter.isCompleted) {
-          createCompleter.complete();
+      final createSyncCompleter = Completer<void>();
+      final createSub = subManager.onMutationSyncResult.listen((result) {
+        if (result.reducerName == 'create_note' && !createSyncCompleter.isCompleted) {
+          createSyncCompleter.complete();
         }
       });
 
@@ -506,14 +515,23 @@ void main() {
         encoder.writeString('Will be deleted');
       });
 
-      await createCompleter.future.timeout(_timeout);
+      await createSyncCompleter.future.timeout(_timeout);
       await createSub.cancel();
+
+      await Future.delayed(Duration(milliseconds: 100));
 
       final noteToDelete = noteTable.iter().firstWhere((n) => n.title == testTitle);
       final noteId = noteToDelete.id;
       expect(noteTable.getRow(noteId), isNotNull, reason: 'Setup: note exists');
 
-      final deleteFuture = subManager.reducers.callWith(
+      final deleteSyncCompleter = Completer<MutationSyncResult>();
+      final deleteSub = subManager.onMutationSyncResult.listen((result) {
+        if (result.reducerName == 'delete_note' && !deleteSyncCompleter.isCompleted) {
+          deleteSyncCompleter.complete(result);
+        }
+      });
+
+      final result = await subManager.reducers.callWith(
         'delete_note',
         (encoder) => encoder.writeU32(noteId),
         optimisticChanges: [
@@ -521,11 +539,13 @@ void main() {
         ],
       );
 
+      expect(result.isPending, isTrue, reason: 'Offline-first returns pending immediately');
       expect(noteTable.getRow(noteId), isNull,
           reason: 'Row should be removed immediately by optimistic delete');
 
-      final result = await deleteFuture.timeout(_timeout);
-      expect(result.isSuccess, isTrue, reason: 'Server must confirm delete');
+      final syncResult = await deleteSyncCompleter.future.timeout(_timeout);
+      await deleteSub.cancel();
+      expect(syncResult.success, isTrue, reason: 'Server must confirm delete');
 
       await Future.delayed(Duration(milliseconds: 50));
 
@@ -813,7 +833,14 @@ void main() {
       print('  Note 4: optimisticId=$optimisticId4, realId=$realId4');
 
       print('\n=== Step 4: Delete note 3 online ===');
-      final delete3Future = subManager.reducers.callWith(
+      final delete3Completer = Completer<MutationSyncResult>();
+      final delete3Sub = subManager.onMutationSyncResult.listen((result) {
+        if (result.reducerName == 'delete_note' && !delete3Completer.isCompleted) {
+          delete3Completer.complete(result);
+        }
+      });
+
+      final result3 = await subManager.reducers.callWith(
         'delete_note',
         (encoder) => encoder.writeU32(realId3),
         optimisticChanges: [
@@ -821,13 +848,15 @@ void main() {
         ],
       );
 
+      expect(result3.isPending, isTrue, reason: 'Offline-first returns pending immediately');
       expect(noteTable.getRow(realId3), isNull,
           reason: 'Note 3 should be optimistically deleted');
       expect(noteTable.getRow(realId4), isNotNull,
           reason: 'Note 4 should still exist');
 
-      final result3 = await delete3Future.timeout(_timeout);
-      expect(result3.isSuccess, isTrue, reason: 'Delete 3 should succeed');
+      final syncResult3 = await delete3Completer.future.timeout(_timeout);
+      await delete3Sub.cancel();
+      expect(syncResult3.success, isTrue, reason: 'Delete 3 should succeed');
 
       await Future.delayed(Duration(milliseconds: 50));
 
@@ -843,7 +872,14 @@ void main() {
       print('\n=== Step 5: Delete note 4 online (BUG CHECK: note 3 should NOT come back) ===');
       final freshNote4 = noteTable.getRow(realId4)!;
 
-      final delete4Future = subManager.reducers.callWith(
+      final delete4Completer = Completer<MutationSyncResult>();
+      final delete4Sub = subManager.onMutationSyncResult.listen((result) {
+        if (result.reducerName == 'delete_note' && !delete4Completer.isCompleted) {
+          delete4Completer.complete(result);
+        }
+      });
+
+      final result4 = await subManager.reducers.callWith(
         'delete_note',
         (encoder) => encoder.writeU32(realId4),
         optimisticChanges: [
@@ -851,11 +887,13 @@ void main() {
         ],
       );
 
+      expect(result4.isPending, isTrue, reason: 'Offline-first returns pending immediately');
       expect(noteTable.getRow(realId4), isNull,
           reason: 'Note 4 should be optimistically deleted');
 
-      final result4 = await delete4Future.timeout(_timeout);
-      expect(result4.isSuccess, isTrue, reason: 'Delete 4 should succeed');
+      final syncResult4 = await delete4Completer.future.timeout(_timeout);
+      await delete4Sub.cancel();
+      expect(syncResult4.success, isTrue, reason: 'Delete 4 should succeed');
 
       await Future.delayed(Duration(milliseconds: 50));
 

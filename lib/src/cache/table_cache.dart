@@ -1,13 +1,12 @@
 import 'dart:async';
 
-import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/cache/row_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/codec/bsatn_decoder.dart';
 import 'package:spacetimedb_dart_sdk/src/messages/shared_types.dart';
 import 'package:spacetimedb_dart_sdk/src/events/event_context.dart';
 import 'package:spacetimedb_dart_sdk/src/events/table_event.dart';
 import 'package:spacetimedb_dart_sdk/src/events/event.dart';
-import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/sdk_logger.dart';
 
 /// Client-side cache for a single SpacetimeDB table
 ///
@@ -48,7 +47,6 @@ class TableCache<T> {
   final int tableId;
   final String tableName;
   final RowDecoder<T> decoder;
-  final Logger _logger = Logger(printer: CustomLogPrinter());
 
   final Map<dynamic, T> _rowsByPrimaryKey = {};
   final List<T> _rows = [];
@@ -525,7 +523,7 @@ class TableCache<T> {
     for (final json in rows) {
       final row = decoder.fromJson(json);
       if (row == null) {
-        _logger.w('Failed to deserialize row in table "$tableName": $json');
+        SdkLogger.w('Failed to deserialize row in table "$tableName": $json');
         continue;
       }
       final primaryKey = decoder.getPrimaryKey(row);
@@ -625,22 +623,20 @@ class TableCache<T> {
     final changes = _optimisticChanges.remove(requestId);
     if (changes == null) return;
 
-    print('🔍 [CACHE] confirmOrRollbackOptimisticChange for "$tableName"');
-    print('🔍 [CACHE]   requestId: "$requestId"');
-    print('🔍 [CACHE]   touchedKeys: ${touchedKeys.map((k) => '"$k" (${k.runtimeType})').toList()}');
-    print('🔍 [CACHE]   changes count: ${changes.length}');
+    SdkLogger.d('confirmOrRollbackOptimisticChange for "$tableName" requestId="$requestId"');
+    SdkLogger.d('touchedKeys: ${touchedKeys.map((k) => '"$k"').toList()}, changes: ${changes.length}');
 
     for (final change in changes.reversed) {
       final wasTouched = touchedKeys.contains(change.primaryKey);
 
-      print('🔍 [CACHE]   Change: ${change.type.name}, PK: "${change.primaryKey}" (${change.primaryKey.runtimeType}), wasTouched: $wasTouched');
+      SdkLogger.d('Change: ${change.type.name}, PK: "${change.primaryKey}", wasTouched: $wasTouched');
 
       if (wasTouched) {
-        print('🔍 [CACHE]     → CONFIRMED (key was touched)');
+        SdkLogger.d('CONFIRMED (key was touched)');
         continue;
       }
 
-      print('🔍 [CACHE]     → ROLLING BACK (key NOT in touchedKeys)');
+      SdkLogger.d('ROLLING BACK (key NOT in touchedKeys)');
       switch (change.type) {
         case _OptimisticChangeType.insert:
           deleteRow(change.primaryKey);
@@ -650,7 +646,7 @@ class TableCache<T> {
           }
         case _OptimisticChangeType.delete:
           if (change.oldRow != null) {
-            print('🔍 [CACHE]     → Re-inserting deleted row!');
+            SdkLogger.d('Re-inserting deleted row');
             insertRow(change.oldRow as T);
           }
       }

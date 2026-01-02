@@ -279,7 +279,7 @@ void main() {
         await failingConnection.dispose();
       });
 
-      test('Online Timeout: Network timeout triggers Rollback', () async {
+      test('Offline-first: Optimistic changes survive network issues', () async {
         final silentConnection = SilentMockConnection();
         final manager =
             SubscriptionManager(silentConnection, offlineStorage: storage);
@@ -293,27 +293,26 @@ void main() {
         final note = createNote(noteId, 'Timeout Note');
         final table = manager.cache.getTableByName('note')! as TableCache<Note>;
 
-        final future = manager.reducers.callWith(
+        final result = await manager.reducers.callWith(
           'create_note',
           (enc) => enc.writeU32(noteId),
-          timeout: const Duration(milliseconds: 100),
           optimisticChanges: [OptimisticChange.insert('note', note.toJson())],
         );
+
+        expect(result.isPending, isTrue,
+            reason: 'Offline-first always returns pending immediately');
 
         expect(table.find(noteId), isNotNull,
             reason: 'Optimistic insert should be applied immediately');
 
-        try {
-          await future;
-          fail('Should have thrown TimeoutException');
-        } on TimeoutException {
-          // Expected
-        }
+        await Future.delayed(const Duration(milliseconds: 100));
 
-        await Future.delayed(const Duration(milliseconds: 10));
+        expect(table.find(noteId), isNotNull,
+            reason: 'CRITICAL: Optimistic changes must survive network delays');
 
-        expect(table.find(noteId), isNull,
-            reason: 'CRITICAL: Online timeout must rollback optimistic changes');
+        final pending = await storage.getPendingMutations();
+        expect(pending.length, equals(1),
+            reason: 'Mutation should be queued for later sync');
 
         await manager.dispose();
         await silentConnection.dispose();

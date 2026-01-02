@@ -8,6 +8,7 @@ import 'package:spacetimedb_dart_sdk/src/messages/client_messages.dart';
 import 'package:spacetimedb_dart_sdk/src/reducers/transaction_result.dart';
 import 'package:spacetimedb_dart_sdk/src/offline/offline_storage.dart';
 import 'package:spacetimedb_dart_sdk/src/offline/pending_mutation.dart';
+import 'package:spacetimedb_dart_sdk/src/utils/sdk_logger.dart';
 
 export 'package:spacetimedb_dart_sdk/src/offline/optimistic_change.dart';
 import 'package:uuid/uuid.dart';
@@ -48,6 +49,7 @@ class ReducerCaller {
   void Function(String requestId, List<OptimisticChange>? changes)?
       onOptimisticChanges;
   void Function(String requestId)? onRollbackOptimistic;
+  void Function()? onTrySyncNow;
 
   ReducerCaller(this._connection, {OfflineStorage? offlineStorage})
       : _offlineStorage = offlineStorage;
@@ -61,14 +63,60 @@ class ReducerCaller {
     bool queueIfOffline = true,
     List<OptimisticChange>? optimisticChanges,
   }) async {
-    print(
-        '🔍 [REDUCER] $reducerName: status=${_connection.status}, isOnline=$_isOnline, hasOfflineStorage=${_offlineStorage != null}');
-    if (!_isOnline && _offlineStorage != null && queueIfOffline) {
-      print('🔍 [REDUCER] Taking OFFLINE path → _queueMutation');
-      return _queueMutation(reducerName, args, optimisticChanges);
-    }
-    print('🔍 [REDUCER] Taking ONLINE path → send to server');
+    SdkLogger.d('$reducerName: status=${_connection.status}, isOnline=$_isOnline, hasOfflineStorage=${_offlineStorage != null}');
 
+    if (_offlineStorage != null) {
+      SdkLogger.d('OFFLINE-FIRST: Always queue first, then sync');
+      return _queueAndMaybeSync(reducerName, args, optimisticChanges);
+    }
+
+    SdkLogger.d('NO OFFLINE STORAGE: Direct send (legacy path)');
+    return _sendDirectly(reducerName, args, timeout, optimisticChanges);
+  }
+
+  Future<TransactionResult> _queueAndMaybeSync(
+    String reducerName,
+    Uint8List args,
+    List<OptimisticChange>? optimisticChanges,
+  ) async {
+    final requestId = _uuid.v4();
+
+    if (optimisticChanges != null && optimisticChanges.isNotEmpty) {
+      SdkLogger.d('Applying optimistic changes immediately...');
+      onOptimisticChanges?.call(requestId, optimisticChanges);
+    }
+
+    SdkLogger.d('Queuing $reducerName to disk (requestId=$requestId)');
+    final mutation = PendingMutation(
+      requestId: requestId,
+      reducerName: reducerName,
+      encodedArgs: args,
+      createdAt: DateTime.now(),
+      optimisticChanges: optimisticChanges,
+    );
+
+    await _offlineStorage!.enqueueMutation(mutation);
+    onMutationQueued?.call(requestId, optimisticChanges);
+
+    if (_isOnline) {
+      SdkLogger.d('Online, triggering immediate sync...');
+      onTrySyncNow?.call();
+    } else {
+      SdkLogger.d('Offline, mutation queued for later sync');
+    }
+
+    return TransactionResult.pending(
+      reducerName: reducerName,
+      requestId: requestId,
+    );
+  }
+
+  Future<TransactionResult> _sendDirectly(
+    String reducerName,
+    Uint8List args,
+    Duration? timeout,
+    List<OptimisticChange>? optimisticChanges,
+  ) async {
     final requestId = _nextRequestId++;
     final completer = Completer<TransactionResult>();
     final effectiveTimeout = timeout ?? defaultTimeout;
@@ -87,12 +135,8 @@ class ReducerCaller {
     );
 
     if (hasOptimistic) {
-      print(
-          '🔍 [ONLINE] Applying optimistic changes: ${optimisticChanges.length}, callback exists: ${onOptimisticChanges != null}');
+      SdkLogger.d('Applying optimistic changes: ${optimisticChanges.length}');
       onOptimisticChanges?.call(requestId.toString(), optimisticChanges);
-    } else {
-      print(
-          '🔍 [ONLINE] No optimistic changes provided (${optimisticChanges?.length ?? 'null'})');
     }
 
     final message = CallReducerMessage(
@@ -103,39 +147,6 @@ class ReducerCaller {
     _connection.send(message.encode());
 
     return completer.future;
-  }
-
-  Future<TransactionResult> _queueMutation(
-    String reducerName,
-    Uint8List args,
-    List<OptimisticChange>? optimisticChanges,
-  ) async {
-    final requestId = _uuid.v4();
-
-    if (optimisticChanges != null && optimisticChanges.isNotEmpty) {
-    print('🔍 [OFFLINE] Applying optimistic changes to memory...');
-    onOptimisticChanges?.call(requestId, optimisticChanges);
-    }
-
-    print(
-        '🔍 [QUEUE] Queuing $reducerName with requestId=$requestId, optimisticChanges=${optimisticChanges?.length ?? 0}');
-    final mutation = PendingMutation(
-      requestId: requestId,
-      reducerName: reducerName,
-      encodedArgs: args,
-      createdAt: DateTime.now(),
-      optimisticChanges: optimisticChanges,
-    );
-
-    await _offlineStorage!.enqueueMutation(mutation);
-    print(
-        '🔍 [QUEUE] Mutation enqueued, calling onMutationQueued (callback exists: ${onMutationQueued != null})');
-    onMutationQueued?.call(requestId, optimisticChanges);
-
-    return TransactionResult.pending(
-      reducerName: reducerName,
-      requestId: requestId,
-    );
   }
 
   Future<TransactionResult> callWithBytes(

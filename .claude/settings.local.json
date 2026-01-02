@@ -16,7 +16,10 @@
       "Bash(dart analyze:*)",
       "Skill(dart-test-writing)",
       "Bash(dart run spacetimedb_dart_sdk:generate:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Skill(dev)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

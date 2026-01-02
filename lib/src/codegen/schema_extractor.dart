@@ -1,11 +1,8 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:path/path.dart' as path;
-import 'package:logger/logger.dart';
 import 'package:spacetimedb_dart_sdk/src/codegen/models.dart';
-import 'package:spacetimedb_dart_sdk/src/utils/custom_log_printer.dart';
-
-final _logger = Logger(printer: CustomLogPrinter());
+import 'package:spacetimedb_dart_sdk/src/utils/sdk_logger.dart';
 
 /// Extracts database schema from various sources
 ///
@@ -61,7 +58,7 @@ class SchemaExtractor {
   /// - `spacetime` CLI installed
   /// - `spacetimedb-standalone` binary available
   static Future<DatabaseSchema> fromProject(String projectPath) async {
-    _logger.i('Building SpacetimeDB module at: $projectPath');
+    SdkLogger.i('Building SpacetimeDB module at: $projectPath');
 
     // Build the module
     final buildResult = await Process.run(
@@ -78,7 +75,7 @@ class SchemaExtractor {
 
     // Extract WASM path from build output
     final wasmPath = _parseWasmPath(buildResult.stdout.toString(), projectPath);
-    _logger.i('Module built: $wasmPath');
+    SdkLogger.i('Module built: $wasmPath');
 
     // Extract schema from WASM
     return fromWasm(wasmPath);
@@ -89,7 +86,7 @@ class SchemaExtractor {
   /// Uses `spacetimedb-standalone extract-schema` to read the schema
   /// embedded in the WASM module.
   static Future<DatabaseSchema> fromWasm(String wasmPath) async {
-    _logger.i('Extracting schema from WASM: $wasmPath');
+    SdkLogger.i('Extracting schema from WASM: $wasmPath');
 
     // Find spacetimedb-standalone binary
     final standalonePath = await _findStandaloneBinary();

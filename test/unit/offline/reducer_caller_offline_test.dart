@@ -120,15 +120,18 @@ void main() {
       await storage.dispose();
     });
 
-    test('sends directly when online', () async {
+    test('queues first then triggers sync when online (offline-first)', () async {
       connection.setOnline();
 
-      final future = caller.call('create_note', Uint8List.fromList([1, 2, 3]));
+      var syncTriggered = false;
+      caller.onTrySyncNow = () => syncTriggered = true;
 
-      expect(connection.sentMessages.length, equals(1));
-      expect(await storage.getPendingMutations().timeout(_timeout), isEmpty);
+      final result = await caller.call('create_note', Uint8List.fromList([1, 2, 3]));
 
-      future.ignore();
+      expect(result.isPending, isTrue);
+      expect(syncTriggered, isTrue);
+      final pending = await storage.getPendingMutations().timeout(_timeout);
+      expect(pending.length, equals(1));
     });
 
     test('queues mutation when offline', () async {
@@ -145,19 +148,18 @@ void main() {
       expect(pending.first.reducerName, equals('create_note'));
     });
 
-    test('queueIfOffline=false sends even when offline', () async {
+    test('offline-first always queues regardless of queueIfOffline flag', () async {
       connection.setOffline();
 
-      final future = caller.call(
+      final result = await caller.call(
         'create_note',
         Uint8List.fromList([1, 2, 3]),
         queueIfOffline: false,
       );
 
-      expect(connection.sentMessages.length, equals(1));
-      expect(await storage.getPendingMutations().timeout(_timeout), isEmpty);
-
-      future.ignore();
+      expect(result.isPending, isTrue);
+      final pending = await storage.getPendingMutations().timeout(_timeout);
+      expect(pending.length, equals(1));
     });
 
     test('stores optimistic changes with queued mutation', () async {

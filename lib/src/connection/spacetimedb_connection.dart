@@ -92,6 +92,7 @@ class SpacetimeDbConnection {
       StreamController<ConnectionQuality>.broadcast();
   String? _lastError;
   DateTime? _lastSuccessfulConnection;
+  ConnectionStatus? _lastLoggedStatus;
 
   final StreamController<ConnectionState> _stateController =
       StreamController<ConnectionState>.broadcast();
@@ -290,8 +291,10 @@ class SpacetimeDbConnection {
       lastPongReceived: _lastMessageReceived,
     );
 
-    SdkLogger.i(
-        'Quality update: health=${quality.healthScore.toStringAsFixed(1)} status=${quality.status.name} reconnects=${quality.reconnectAttempts}');
+    if (_currentStatus != _lastLoggedStatus) {
+      SdkLogger.i('Connection: ${quality.status.name} (health=${quality.healthScore.toStringAsFixed(1)})');
+      _lastLoggedStatus = _currentStatus;
+    }
     _qualityController.add(quality);
   }
 

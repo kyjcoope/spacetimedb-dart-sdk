@@ -278,6 +278,7 @@ class TableCache<T> {
       eventStream.where((e) => e.context.isMyTransaction);
 
   void _emitChanges(_RowChanges<T> changes, EventContext context) {
+    SdkLogger.i('EMIT_CHANGES[$tableName]: inserts=${changes.inserted.length}, updates=${changes.updated.length}, deletes=${changes.deleted.length}');
     for (final row in changes.inserted) {
       _insertController.add(row);
       _changeController.add(TableChange.insert(row));

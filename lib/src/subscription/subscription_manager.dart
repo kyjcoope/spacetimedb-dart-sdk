@@ -113,6 +113,11 @@ class SubscriptionManager {
   StreamSubscription<Uint8List>? _messageSubscription;
   StreamSubscription<ConnectionStatus>? _connectionStatusSubscription;
 
+  Timer? _retryTimer;
+  int _retryAttempt = 0;
+  static const Duration _initialRetryDelay = Duration(seconds: 5);
+  static const Duration _maxRetryDelay = Duration(seconds: 60);
+
   SubscriptionManager(this._connection, {OfflineStorage? offlineStorage})
       : _offlineStorage = offlineStorage {
     reducers = ReducerCaller(_connection, offlineStorage: offlineStorage);
@@ -160,8 +165,10 @@ class SubscriptionManager {
     _connectionStatusSubscription =
         _connection.connectionStatus.listen((status) {
       if (status == ConnectionStatus.connected) {
+        _retryAttempt = 0;
         _onReconnected();
       } else if (status == ConnectionStatus.disconnected) {
+        _cancelRetry();
         _initialSubscriptionReceived = false;
       }
     });
@@ -238,6 +245,7 @@ class SubscriptionManager {
   /// Handle incoming binary messages
   void _handleMessage(Uint8List bytes) {
     if (_disposed) return;
+    SdkLogger.i('WS_MSG: ${bytes.length} bytes received');
     try {
       final message = MessageDecoder.decode(bytes);
       _routeMessage(message);
@@ -249,6 +257,7 @@ class SubscriptionManager {
   /// Route decoded messages to appropriate streams
   void _routeMessage(ServerMessage message) {
     if (_disposed) return;
+    SdkLogger.i('ROUTE_MSG: ${message.runtimeType}');
     switch (message) {
       case IdentityTokenMessage():
         // Store identity and address for public access
@@ -365,6 +374,11 @@ class SubscriptionManager {
   }
 
   void _handleTransactionUpdate(TransactionUpdateMessage message) {
+    SdkLogger.i('TXN_UPDATE: reducer=${message.reducerCall.reducerName}, tables=${message.tableUpdates.length}');
+    for (final tu in message.tableUpdates) {
+      SdkLogger.i('  TABLE: ${tu.tableName}, updates=${tu.updates.length}');
+    }
+
     // DUAL DISPATCH: This message serves two purposes:
     // 1. Complete pending reducer Future (if we initiated this call)
     // 2. Update table cache and emit events (always happens)
@@ -470,6 +484,8 @@ class SubscriptionManager {
   }
 
   void _handleTransactionUpdateLight(TransactionUpdateLightMessage message) {
+    SdkLogger.i('TXN_LIGHT: requestId=${message.requestId}, tables=${message.tableUpdates.length}');
+
     // DUAL DISPATCH: Handle both reducer completion and table updates
 
     // Get UUID before completing request (completeRequest removes it)
@@ -481,7 +497,6 @@ class SubscriptionManager {
     final isOurTransaction = uuidRequestId != null;
     final hasOptimistic = cache.anyTableHasOptimisticChange(effectiveRequestId);
 
-    SdkLogger.d('TXN-LIGHT: numericRequestId=$numericRequestId, uuidRequestId=$uuidRequestId');
     SdkLogger.d('TXN-LIGHT: isOurTransaction=$isOurTransaction, hasOptimistic=$hasOptimistic');
 
     // Route to ReducerCaller first (completes Future if request_id matches)
@@ -836,7 +851,14 @@ class SubscriptionManager {
       await _ensureOfflineStorageInitialized();
 
       final pending = await storage.getPendingMutations();
-      if (pending.isEmpty) return;
+      if (pending.isEmpty) {
+        _cachedPendingCount = 0;
+        _updateSyncState(_currentSyncState.copyWith(
+          status: SyncStatus.idle,
+          pendingCount: 0,
+        ));
+        return;
+      }
 
       _cachedPendingCount = pending.length;
       _updateSyncState(_currentSyncState.copyWith(
@@ -924,6 +946,39 @@ class SubscriptionManager {
       pendingCount: _cachedPendingCount,
       lastSyncTime: DateTime.now(),
     ));
+
+    if (remaining.isNotEmpty && _connection.status == ConnectionStatus.connected) {
+      _scheduleRetry();
+    } else if (remaining.isEmpty) {
+      _cancelRetry();
+      _retryAttempt = 0;
+    }
+  }
+
+  void _scheduleRetry() {
+    if (_disposed) return;
+    _retryTimer?.cancel();
+
+    final delay = Duration(
+      milliseconds: (_initialRetryDelay.inMilliseconds * (1 << _retryAttempt))
+          .clamp(0, _maxRetryDelay.inMilliseconds),
+    );
+    _retryAttempt++;
+
+    SdkLogger.i('Scheduling sync retry in ${delay.inSeconds}s (attempt $_retryAttempt)');
+
+    _retryTimer = Timer(delay, () {
+      if (_disposed) return;
+      if (_connection.status == ConnectionStatus.connected) {
+        SdkLogger.i('Auto-retry: syncing pending mutations');
+        syncPendingMutations();
+      }
+    });
+  }
+
+  void _cancelRetry() {
+    _retryTimer?.cancel();
+    _retryTimer = null;
   }
 
   Future<List<PendingMutation>> getPendingMutations() async {
@@ -948,6 +1003,7 @@ class SubscriptionManager {
 
   Future<void> dispose() async {
     _disposed = true;
+    _cancelRetry();
     _messageSubscription?.cancel();
     _connectionStatusSubscription?.cancel();
     _initialSubscriptionController.close();

@@ -15,6 +15,9 @@ enum ConnectionStatus {
   /// Connection lost, attempting to reconnect (with attempt count)
   reconnecting,
 
+  /// Authentication failed (401) - token invalid or expired, app should handle
+  authError,
+
   /// Too many reconnection failures, manual intervention required
   fatalError,
 }
@@ -31,7 +34,8 @@ extension ConnectionStatusExtension on ConnectionStatus {
   /// Whether manual retry is possible
   bool get canRetry =>
       this == ConnectionStatus.disconnected ||
-      this == ConnectionStatus.fatalError;
+      this == ConnectionStatus.fatalError ||
+      this == ConnectionStatus.authError;
 
   /// Human-readable display name for this status
   String get displayName {
@@ -44,6 +48,8 @@ extension ConnectionStatusExtension on ConnectionStatus {
         return 'Connected';
       case ConnectionStatus.reconnecting:
         return 'Reconnecting...';
+      case ConnectionStatus.authError:
+        return 'Authentication Failed';
       case ConnectionStatus.fatalError:
         return 'Connection Failed';
     }

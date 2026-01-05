@@ -398,10 +398,15 @@ class SpacetimeDbConnection {
     _updateState(ConnectionState.reconnecting);
     _updateStatus(ConnectionStatus.reconnecting);
     _reconnectTimer = Timer(delay, () async {
+      _updateState(ConnectionState.disconnected);
       try {
         await connect();
+      } on SpacetimeDbAuthException {
+        SdkLogger.e('Authentication failed during reconnect - token may be invalid');
+        _shouldReconnect = false;
+        _updateStatus(ConnectionStatus.authError);
       } catch (e) {
-        await _attemptReconnect(); // Try again
+        await _attemptReconnect();
       }
     });
   }

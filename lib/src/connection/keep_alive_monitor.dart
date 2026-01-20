@@ -36,6 +36,7 @@ class KeepAliveMonitor {
   Timer? _idleTimer;
   Timer? _timeoutTimer;
   bool _isAwaitingPong = false;
+  bool _stopped = false;
 
   KeepAliveMonitor({
     required void Function() onSendPing,
@@ -52,39 +53,38 @@ class KeepAliveMonitor {
   /// This acts as the "debouncer" - each call resets the idle timer,
   /// pushing the next ping 30 seconds into the future.
   void notifyMessageReceived() {
-    // 1. If we were waiting for a response to a ping, cancel the death timer.
-    //    We got a response (or normal traffic), so we are alive.
+    if (_stopped) return;
+
     if (_isAwaitingPong) {
       _isAwaitingPong = false;
       _timeoutTimer?.cancel();
+      _timeoutTimer = null;
     }
 
-    // 2. Cancel the pending ping (Debounce)
     _idleTimer?.cancel();
-
-    // 3. Schedule a new ping for the future
-    //    If another message comes before this runs, this timer gets cancelled again.
     _idleTimer = Timer(_idleThreshold, _triggerPing);
   }
 
   void _triggerPing() {
-    _isAwaitingPong = true;
+    if (_stopped) return;
 
-    // Execute the actual network call
+    _isAwaitingPong = true;
     _sendPingCallback();
 
-    // Start the "Death Timer"
-    // If notifyMessageReceived() isn't called before this finishes, we disconnect.
     _timeoutTimer = Timer(_pongTimeout, () {
-      stop(); // Clean up timers
+      if (_stopped) return;
+      stop();
       _onTimeoutCallback();
     });
   }
 
   /// Stop all monitoring and clean up timers
   void stop() {
+    _stopped = true;
     _idleTimer?.cancel();
+    _idleTimer = null;
     _timeoutTimer?.cancel();
+    _timeoutTimer = null;
     _isAwaitingPong = false;
   }
 }

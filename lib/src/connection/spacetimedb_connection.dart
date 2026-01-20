@@ -324,10 +324,9 @@ class SpacetimeDbConnection {
   void _setupMessageListener() {
     _channel!.stream.listen(
       (dynamic data) {
-        // Every single message pushes the next ping 30 seconds into the future
         _keepAlive?.notifyMessageReceived();
         _lastMessageReceived = DateTime.now();
-        _updateQuality(); // Emit quality update after message received
+        _updateQuality();
 
         if (data is Uint8List) {
           // if (data.isNotEmpty) {
@@ -529,14 +528,8 @@ class SpacetimeDbConnection {
   }
 
   void _handleStaleConnection() {
-    // Close the connection
+    _keepAlive?.stop();
     _channel?.sink.close();
-    _channel = null;
-
-    _updateState(ConnectionState.disconnected);
-    _updateStatus(ConnectionStatus.reconnecting);
-
-    _attemptReconnect();
   }
 
   /// Disposes of resources used by this connection

@@ -179,15 +179,10 @@ class SubscriptionManager {
       SdkLogger.i('Re-subscribing to ${_activeSubscriptionQueries.length} queries...');
       final message = SubscribeMessage(_activeSubscriptionQueries.toList());
       _connection.send(message.encode());
+    } else {
+      SdkLogger.i('No active subscriptions, syncing pending mutations directly...');
+      syncPendingMutations();
     }
-
-    if (!_initialSubscriptionReceived) {
-      SdkLogger.i('Waiting for InitialSubscription before sync...');
-      await onInitialSubscription.first;
-    }
-
-    SdkLogger.i('Syncing pending mutations...');
-    await syncPendingMutations();
   }
 
   Stream<SyncState> get onSyncStateChanged => _syncStateController.stream;
@@ -272,6 +267,8 @@ class SubscriptionManager {
           if (_disposed) return;
           _initialSubscriptionReceived = true;
           _initialSubscriptionController.add(message);
+          SdkLogger.i('Syncing pending mutations after initial subscription...');
+          syncPendingMutations();
         });
       case TransactionUpdateMessage():
         _handleTransactionUpdate(message);

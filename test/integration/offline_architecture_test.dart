@@ -144,14 +144,12 @@ void main() {
       await syncCompleter.future.timeout(_timeout);
       await syncSub.cancel();
 
-      expect(noteTable.getRow(optimisticNoteId), isNull,
-          reason: 'Optimistic placeholder should be removed after sync (server assigns different ID)');
+      expect(noteTable.getRow(optimisticNoteId), isNotNull,
+          reason: 'Row should still exist after sync (client-generated ID is preserved by server)');
 
-      final notesWithTitle = noteTable.iter()
-          .where((n) => n.title == optimisticTitle)
-          .toList();
-      expect(notesWithTitle.length, equals(1),
-          reason: 'Server should have created the real row with server-assigned ID');
+      final note = noteTable.getRow(optimisticNoteId)!;
+      expect(note.title, equals(optimisticTitle),
+          reason: 'Row should have correct title after sync');
     }, timeout: const Timeout(Duration(seconds: 30)));
 
     test('Delete Persistence: deleted rows stay deleted after app restart', () async {
@@ -491,11 +489,11 @@ void main() {
 
       expect(syncResult.success, isTrue, reason: 'Sync should succeed');
 
-      expect(noteTable.getRow(optimisticId), isNull,
-          reason: 'Optimistic placeholder row should be removed after server confirms (server assigns different ID)');
+      expect(noteTable.getRow(optimisticId), isNotNull,
+          reason: 'Row should still exist after server confirms (client-generated ID is preserved)');
 
       expect(noteTable.count(), equals(initialCount + 1),
-          reason: 'Server row should exist (with server-assigned ID)');
+          reason: 'New row should exist with client-generated ID');
     }, timeout: const Timeout(Duration(seconds: 30)));
 
     test('Online Delete Integrity: Real server confirmation keeps row deleted (Zombie Killer)', () async {
@@ -761,7 +759,7 @@ void main() {
 
       print('\n=== Step 2: Create 2 notes while offline ===');
       final testPrefix = 'SwapBug-${DateTime.now().millisecondsSinceEpoch}';
-      final optimisticId3 = DateTime.now().microsecondsSinceEpoch;
+      final optimisticId3 = DateTime.now().millisecondsSinceEpoch % 1000000000 + 900000;
       final optimisticId4 = optimisticId3 + 1;
 
       await subManager.reducers.callWith(

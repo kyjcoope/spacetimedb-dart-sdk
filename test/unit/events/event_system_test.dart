@@ -11,7 +11,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'create_note',
         reducerArgs: {'title': 'Test', 'content': 'Content'},
       );
@@ -74,7 +74,8 @@ void main() {
 
     test('OutOfEnergy has correct toString', () {
       final status = OutOfEnergy('Budget: 1000/500');
-      expect(status.toString(), equals('OutOfEnergy(budgetInfo: Budget: 1000/500)'));
+      expect(status.toString(),
+          equals('OutOfEnergy(budgetInfo: Budget: 1000/500)'));
     });
 
     test('pattern matching works on UpdateStatus', () {
@@ -122,7 +123,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: myConnectionId,
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test',
         reducerArgs: {},
       );
@@ -140,7 +141,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: otherConnectionId,
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test',
         reducerArgs: {},
       );
@@ -155,7 +156,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test',
         reducerArgs: {},
       );
@@ -172,7 +173,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: null,
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test',
         reducerArgs: {},
       );
@@ -190,7 +191,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: otherConnectionId,
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test',
         reducerArgs: {},
       );

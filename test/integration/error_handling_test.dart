@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:test/test.dart';
 import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';
 import '../generated/note.dart';
 import '../generated/reducer_args.dart';
 import '../helpers/integration_test_helper.dart';
-
 
 /// Error handling and failure mode tests for SpacetimeDB Dart SDK
 
@@ -23,9 +21,12 @@ void main() {
 
     // PHASE 0: Register decoders
     subManager.cache.registerDecoder<Note>('note', NoteDecoder());
-    subManager.reducerRegistry.registerDecoder('create_note', CreateNoteArgsDecoder());
-    subManager.reducerRegistry.registerDecoder('update_note', UpdateNoteArgsDecoder());
-    subManager.reducerRegistry.registerDecoder('delete_note', DeleteNoteArgsDecoder());
+    subManager.reducerRegistry
+        .registerDecoder('create_note', CreateNoteArgsDecoder());
+    subManager.reducerRegistry
+        .registerDecoder('update_note', UpdateNoteArgsDecoder());
+    subManager.reducerRegistry
+        .registerDecoder('delete_note', DeleteNoteArgsDecoder());
 
     await connection.connect();
     await subManager.onIdentityToken.first.timeout(const Duration(seconds: 5));
@@ -64,7 +65,8 @@ void main() {
 
       final errorMsg = result.status.errorMessage!.toLowerCase();
       expect(
-        errorMsg.contains('not found') || errorMsg.contains('no such procedure'),
+        errorMsg.contains('not found') ||
+            errorMsg.contains('no such procedure'),
         isTrue,
         reason: 'Error message should indicate procedure not found',
       );
@@ -91,8 +93,7 @@ void main() {
       // D. ASSERT
       expect(error.requestId, equals(requestId),
           reason: 'Request ID should match');
-      expect(error.queryId, equals(queryId),
-          reason: 'Query ID should match');
+      expect(error.queryId, equals(queryId), reason: 'Query ID should match');
       expect(error.error, isNotEmpty,
           reason: 'Error message should not be empty');
 
@@ -123,8 +124,7 @@ void main() {
       // D. ASSERT
       expect(error.requestId, equals(requestId),
           reason: 'Request ID should match');
-      expect(error.queryId, equals(queryId),
-          reason: 'Query ID should match');
+      expect(error.queryId, equals(queryId), reason: 'Query ID should match');
       expect(error.error, isNotEmpty,
           reason: 'Error message should not be empty');
 
@@ -149,11 +149,9 @@ void main() {
 
       // C. EXPECT TIMEOUT
       // Server will not respond, so client must time out
-      await expectLater(
-        future,
-        throwsA(isA<TimeoutException>()),
-        reason: 'Server silently drops malformed messages; client must timeout'
-      );
+      await expectLater(future, throwsA(isA<TimeoutException>()),
+          reason:
+              'Server silently drops malformed messages; client must timeout');
 
       // D. VERIFY CONNECTION STILL ALIVE
       // Server didn't close connection, just ignored that one message

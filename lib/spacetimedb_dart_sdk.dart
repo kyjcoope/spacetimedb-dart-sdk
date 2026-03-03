@@ -3,6 +3,9 @@ library spacetimedb_dart_sdk;
 // Re-export Int64 from fixnum for web-compatible 64-bit integers
 export 'package:fixnum/fixnum.dart' show Int64;
 
+// Re-export typed_data for generated Identity code (Uint8List)
+export 'dart:typed_data' show Uint8List;
+
 // Core connection
 export 'src/connection/spacetimedb_connection.dart';
 export 'src/connection/connection_state.dart';

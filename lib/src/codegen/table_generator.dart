@@ -12,26 +12,34 @@ class TableGenerator {
 
     buf.writeln('// GENERATED CODE - DO NOT MODIFY BY HAND');
     buf.writeln();
-    buf.writeln("import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';");
+    buf.writeln(
+        "import 'package:spacetimedb_dart_sdk/spacetimedb_dart_sdk.dart';");
 
     final productType = schema.typeSpace.types[table.productTypeRef].product;
     if (productType == null) {
       throw Exception('Table ${table.name} has no product type');
     }
 
-    // Collect imports for Ref types
+    // Check if we need dart:typed_data (for Identity fields)
+    bool needsTypedData = false;
+    for (final element in productType.elements) {
+      if (TypeMapper.isIdentityType(
+        element.algebraicType,
+        typeSpace: schema.typeSpace,
+        typeDefs: schema.types,
+      )) {
+        needsTypedData = true;
+        break;
+      }
+    }
+    if (needsTypedData) {
+      buf.writeln("import 'dart:typed_data';");
+    }
+
+    // Collect imports for Ref types (excluding Identity, which comes from the SDK)
     final imports = <String>{};
     for (final element in productType.elements) {
-      if (TypeMapper.isRefType(element.algebraicType)) {
-        final refTypeName = TypeMapper.getRefTypeName(
-          element.algebraicType,
-          schema.types,
-        );
-        if (refTypeName != null) {
-          final fileName = _toSnakeCase(refTypeName);
-          imports.add("import '$fileName.dart';");
-        }
-      }
+      _collectRefImports(element.algebraicType, imports);
     }
 
     // Add imports
@@ -55,11 +63,15 @@ class TableGenerator {
     }
     buf.writeln();
 
-    // Constructor
+    // Constructor — Option fields are optional (no 'required')
     buf.writeln('  $className({');
     for (final element in productType.elements) {
       final fieldName = _toCamelCase(element.name ?? 'unknown');
-      buf.writeln('    required this.$fieldName,');
+      if (TypeMapper.isOptionType(element.algebraicType)) {
+        buf.writeln('    this.$fieldName,');
+      } else {
+        buf.writeln('    required this.$fieldName,');
+      }
     }
     buf.writeln('  });');
     buf.writeln();
@@ -68,14 +80,7 @@ class TableGenerator {
     buf.writeln('  void encodeBsatn(BsatnEncoder encoder) {');
     for (final element in productType.elements) {
       final fieldName = _toCamelCase(element.name ?? 'unknown');
-
-      if (TypeMapper.isRefType(element.algebraicType)) {
-        // For Ref types, call the type's encode method
-        buf.writeln('    $fieldName.encode(encoder);');
-      } else {
-        final method = TypeMapper.getEncoderMethod(element.algebraicType);
-        buf.writeln('    encoder.$method($fieldName);');
-      }
+      _writeEncodeLine(buf, fieldName, element.algebraicType);
     }
     buf.writeln('  }');
     buf.writeln();
@@ -85,18 +90,8 @@ class TableGenerator {
     buf.writeln('    return $className(');
     for (final element in productType.elements) {
       final fieldName = _toCamelCase(element.name ?? 'unknown');
-
-      if (TypeMapper.isRefType(element.algebraicType)) {
-        final typeName = TypeMapper.toDartType(
-          element.algebraicType,
-          typeSpace: schema.typeSpace,
-          typeDefs: schema.types,
-        );
-        buf.writeln('      $fieldName: $typeName.decode(decoder),');
-      } else {
-        final method = TypeMapper.getDecoderMethod(element.algebraicType);
-        buf.writeln('      $fieldName: decoder.$method(),');
-      }
+      final decodeExpr = _getDecodeExpression(element.algebraicType);
+      buf.writeln('      $fieldName: $decodeExpr,');
     }
     buf.writeln('    );');
     buf.writeln('  }');
@@ -119,7 +114,8 @@ class TableGenerator {
     buf.writeln('    return $className(');
     for (final element in productType.elements) {
       final fieldName = _toCamelCase(element.name ?? 'unknown');
-      final fromJsonExpr = _getFromJsonExpression(fieldName, element.algebraicType);
+      final fromJsonExpr =
+          _getFromJsonExpression(fieldName, element.algebraicType);
       buf.writeln('      $fieldName: $fromJsonExpr,');
     }
     buf.writeln('    );');
@@ -130,8 +126,31 @@ class TableGenerator {
     buf.writeln('}');
     buf.writeln();
 
-    // Generate Decoder class
-    buf.writeln('class ${className}Decoder extends RowDecoder<$className> {');
+    // Generate Identity parser helper if needed
+    if (needsTypedData) {
+      buf.writeln(
+          '/// Parse identity from various formats (hex string with optional 0x prefix, or raw bytes).');
+      buf.writeln('Identity _parseIdentity(dynamic value) {');
+      buf.writeln('  if (value is Identity) return value;');
+      buf.writeln('  if (value is String) {');
+      buf.writeln(
+          "    final hex = value.startsWith('0x') ? value.substring(2) : value;");
+      buf.writeln('    final bytes = List<int>.generate(');
+      buf.writeln('      hex.length ~/ 2,');
+      buf.writeln(
+          '      (i) => int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16),');
+      buf.writeln('    );');
+      buf.writeln('    return Identity(Uint8List.fromList(bytes));');
+      buf.writeln('  }');
+      buf.writeln('  // Fallback: zero identity');
+      buf.writeln('  return Identity(Uint8List(32));');
+      buf.writeln('}');
+      buf.writeln();
+    }
+
+    // Generate Decoder class with collision-safe name
+    final decoderClassName = TypeMapper.getDecoderClassName(table.name);
+    buf.writeln('class $decoderClassName extends RowDecoder<$className> {');
     buf.writeln('  @override');
     buf.writeln('  $className decode(BsatnDecoder decoder) {');
     buf.writeln('    return $className.decodeBsatn(decoder);');
@@ -150,7 +169,6 @@ class TableGenerator {
           typeSpace: schema.typeSpace,
           typeDefs: schema.types,
         );
-        // Use dynamic to support any PK type (int, String, etc.)
         buf.writeln('  $pkDartType? getPrimaryKey($className row) {');
         buf.writeln('    return row.$pkFieldName;');
       } else {
@@ -165,10 +183,12 @@ class TableGenerator {
     buf.writeln('  }');
     buf.writeln();
     buf.writeln('  @override');
-    buf.writeln('  Map<String, dynamic>? toJson($className row) => row.toJson();');
+    buf.writeln(
+        '  Map<String, dynamic>? toJson($className row) => row.toJson();');
     buf.writeln();
     buf.writeln('  @override');
-    buf.writeln('  $className? fromJson(Map<String, dynamic> json) => $className.fromJson(json);');
+    buf.writeln(
+        '  $className? fromJson(Map<String, dynamic> json) => $className.fromJson(json);');
     buf.writeln();
     buf.writeln('  @override');
     buf.writeln('  bool get supportsJsonSerialization => true;');
@@ -177,7 +197,176 @@ class TableGenerator {
     return buf.toString();
   }
 
-  String _getToJsonExpression(String fieldName, Map<String, dynamic> algebraicType) {
+  // ---------------------------------------------------------------------------
+  // Encode generation
+  // ---------------------------------------------------------------------------
+
+  void _writeEncodeLine(
+      StringBuffer buf, String fieldName, Map<String, dynamic> algebraicType) {
+    // Option<T>
+    if (TypeMapper.isOptionType(algebraicType)) {
+      final innerType = TypeMapper.getOptionInnerType(algebraicType);
+      if (innerType != null) {
+        if (TypeMapper.isIdentityType(innerType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          buf.writeln(
+              '    encoder.writeOption<Identity>($fieldName, (v) => encoder.writeBytes(v.bytes));');
+        } else if (TypeMapper.isArrayType(innerType)) {
+          final elemType = TypeMapper.getArrayElementType(innerType);
+          final elemEncoder = elemType != null
+              ? TypeMapper.getEncoderMethod(elemType)
+              : 'write';
+          buf.writeln(
+              '    encoder.writeOption<List>($fieldName, (v) => encoder.writeArray(v, (item) => encoder.$elemEncoder(item)));');
+        } else {
+          final encoderMethod = TypeMapper.getEncoderMethod(innerType);
+          final dartType = TypeMapper.toDartType(innerType,
+              typeSpace: schema.typeSpace, typeDefs: schema.types);
+          buf.writeln(
+              '    encoder.writeOption<$dartType>($fieldName, (v) => encoder.$encoderMethod(v));');
+        }
+        return;
+      }
+    }
+
+    // Identity
+    if (TypeMapper.isIdentityType(algebraicType,
+        typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+      buf.writeln('    encoder.writeBytes($fieldName.bytes);');
+      return;
+    }
+
+    // Array<T>
+    if (TypeMapper.isArrayType(algebraicType)) {
+      final elemType = TypeMapper.getArrayElementType(algebraicType);
+      if (elemType != null) {
+        if (TypeMapper.isIdentityType(elemType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          buf.writeln(
+              '    encoder.writeArray($fieldName, (item) => encoder.writeBytes(item.bytes));');
+        } else if (TypeMapper.isRefType(elemType)) {
+          buf.writeln(
+              '    encoder.writeArray($fieldName, (item) => item.encode(encoder));');
+        } else {
+          final innerEncoder = TypeMapper.getEncoderMethod(elemType);
+          buf.writeln(
+              '    encoder.writeArray($fieldName, (item) => encoder.$innerEncoder(item));');
+        }
+      } else {
+        buf.writeln(
+            '    encoder.writeArray($fieldName, (item) => encoder.write(item));');
+      }
+      return;
+    }
+
+    // Ref types (non-Identity)
+    if (TypeMapper.isRefType(algebraicType)) {
+      buf.writeln('    $fieldName.encode(encoder);');
+      return;
+    }
+
+    // Primitive
+    final method = TypeMapper.getEncoderMethod(algebraicType);
+    buf.writeln('    encoder.$method($fieldName);');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Decode generation
+  // ---------------------------------------------------------------------------
+
+  String _getDecodeExpression(Map<String, dynamic> algebraicType) {
+    // Option<T>
+    if (TypeMapper.isOptionType(algebraicType)) {
+      final innerType = TypeMapper.getOptionInnerType(algebraicType);
+      if (innerType != null) {
+        if (TypeMapper.isIdentityType(innerType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          return 'decoder.readOption<Identity>(() => Identity(decoder.readBytes(32)))';
+        }
+        if (TypeMapper.isArrayType(innerType)) {
+          final elemType = TypeMapper.getArrayElementType(innerType);
+          final elemDecoder =
+              elemType != null ? TypeMapper.getDecoderMethod(elemType) : 'read';
+          return 'decoder.readOption<List>(() => decoder.readArray(() => decoder.$elemDecoder()))';
+        }
+        final decoderMethod = TypeMapper.getDecoderMethod(innerType);
+        final dartType = TypeMapper.toDartType(innerType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types);
+        return 'decoder.readOption<$dartType>(() => decoder.$decoderMethod())';
+      }
+    }
+
+    // Identity
+    if (TypeMapper.isIdentityType(algebraicType,
+        typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+      return 'Identity(decoder.readBytes(32))';
+    }
+
+    // Array<T>
+    if (TypeMapper.isArrayType(algebraicType)) {
+      final elemType = TypeMapper.getArrayElementType(algebraicType);
+      if (elemType != null) {
+        if (TypeMapper.isIdentityType(elemType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          return 'decoder.readArray<Identity>(() => Identity(decoder.readBytes(32)))';
+        }
+        if (TypeMapper.isRefType(elemType)) {
+          final typeName = TypeMapper.toDartType(elemType,
+              typeSpace: schema.typeSpace, typeDefs: schema.types);
+          return 'decoder.readArray<$typeName>(() => $typeName.decode(decoder))';
+        }
+        final innerDecoder = TypeMapper.getDecoderMethod(elemType);
+        final dartType = TypeMapper.toDartType(elemType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types);
+        return 'decoder.readArray<$dartType>(() => decoder.$innerDecoder())';
+      }
+    }
+
+    // Ref types (non-Identity)
+    if (TypeMapper.isRefType(algebraicType)) {
+      final typeName = TypeMapper.toDartType(algebraicType,
+          typeSpace: schema.typeSpace, typeDefs: schema.types);
+      return '$typeName.decode(decoder)';
+    }
+
+    // Primitive
+    final method = TypeMapper.getDecoderMethod(algebraicType);
+    return 'decoder.$method()';
+  }
+
+  // ---------------------------------------------------------------------------
+  // toJson generation
+  // ---------------------------------------------------------------------------
+
+  String _getToJsonExpression(
+      String fieldName, Map<String, dynamic> algebraicType) {
+    // Option<T>
+    if (TypeMapper.isOptionType(algebraicType)) {
+      final innerType = TypeMapper.getOptionInnerType(algebraicType);
+      if (innerType != null) {
+        if (TypeMapper.isIdentityType(innerType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          return '$fieldName?.toHexString';
+        }
+        if (innerType.containsKey('U64') || innerType.containsKey('I64')) {
+          return '$fieldName?.toInt()';
+        }
+        if (_isTimestamp(innerType)) {
+          return '$fieldName?.toInt()';
+        }
+        if (TypeMapper.isRefType(innerType)) {
+          return '$fieldName?.toJson()';
+        }
+      }
+      return fieldName;
+    }
+
+    // Identity
+    if (TypeMapper.isIdentityType(algebraicType,
+        typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+      return '$fieldName.toHexString';
+    }
+
     if (_isTimestamp(algebraicType)) {
       return '$fieldName.toInt()';
     }
@@ -189,6 +378,10 @@ class TableGenerator {
     }
     if (algebraicType.containsKey('Array')) {
       final elementType = algebraicType['Array'] as Map<String, dynamic>;
+      if (TypeMapper.isIdentityType(elementType,
+          typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+        return '$fieldName.map((e) => e.toHexString).toList()';
+      }
       if (TypeMapper.isRefType(elementType)) {
         return '$fieldName.map((e) => e.toJson()).toList()';
       }
@@ -199,12 +392,46 @@ class TableGenerator {
     return fieldName;
   }
 
-  String _getFromJsonExpression(String fieldName, Map<String, dynamic> algebraicType) {
+  // ---------------------------------------------------------------------------
+  // fromJson generation
+  // ---------------------------------------------------------------------------
+
+  String _getFromJsonExpression(
+      String fieldName, Map<String, dynamic> algebraicType) {
     final dartType = TypeMapper.toDartType(
       algebraicType,
       typeSpace: schema.typeSpace,
       typeDefs: schema.types,
     );
+
+    // Option<T>
+    if (TypeMapper.isOptionType(algebraicType)) {
+      final innerType = TypeMapper.getOptionInnerType(algebraicType);
+      if (innerType != null) {
+        if (TypeMapper.isIdentityType(innerType,
+            typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+          return "json['$fieldName'] != null ? _parseIdentity(json['$fieldName']) : null";
+        }
+        if (innerType.containsKey('U64') || innerType.containsKey('I64')) {
+          return "json['$fieldName'] != null\n          ? Int64((json['$fieldName'] as int))\n          : null";
+        }
+        if (_isTimestamp(innerType)) {
+          return "json['$fieldName'] != null\n          ? Int64((json['$fieldName'] as int))\n          : null";
+        }
+        if (TypeMapper.isRefType(innerType)) {
+          final innerDartType = TypeMapper.toDartType(innerType,
+              typeSpace: schema.typeSpace, typeDefs: schema.types);
+          return "json['$fieldName'] != null\n          ? $innerDartType.fromJson(json['$fieldName'] as Map<String, dynamic>)\n          : null";
+        }
+      }
+      return "json['$fieldName']";
+    }
+
+    // Identity
+    if (TypeMapper.isIdentityType(algebraicType,
+        typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+      return "_parseIdentity(json['$fieldName'])";
+    }
 
     if (_isTimestamp(algebraicType)) {
       return "Int64((json['$fieldName'] as int?) ?? 0)";
@@ -222,6 +449,10 @@ class TableGenerator {
         typeSpace: schema.typeSpace,
         typeDefs: schema.types,
       );
+      if (TypeMapper.isIdentityType(elementType,
+          typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+        return "(json['$fieldName'] as List?)?.map((e) => _parseIdentity(e)).toList() ?? []";
+      }
       if (TypeMapper.isRefType(elementType)) {
         return "(json['$fieldName'] as List?)?.map((e) => $innerDartType.fromJson(e as Map<String, dynamic>)).toList() ?? []";
       }
@@ -245,6 +476,46 @@ class TableGenerator {
     return "json['$fieldName']";
   }
 
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  /// Recursively collect import statements for Ref types (excluding Identity).
+  void _collectRefImports(
+      Map<String, dynamic> algebraicType, Set<String> imports) {
+    // Option inner type
+    if (TypeMapper.isOptionType(algebraicType)) {
+      final innerType = TypeMapper.getOptionInnerType(algebraicType);
+      if (innerType != null) {
+        _collectRefImports(innerType, imports);
+      }
+      return;
+    }
+
+    // Array element type
+    if (TypeMapper.isArrayType(algebraicType)) {
+      final elemType = TypeMapper.getArrayElementType(algebraicType);
+      if (elemType != null) {
+        _collectRefImports(elemType, imports);
+      }
+      return;
+    }
+
+    // Ref types — Identity comes from SDK, skip import
+    if (TypeMapper.isRefType(algebraicType)) {
+      if (TypeMapper.isIdentityType(algebraicType,
+          typeSpace: schema.typeSpace, typeDefs: schema.types)) {
+        return; // Identity is re-exported from the SDK
+      }
+      final refTypeName =
+          TypeMapper.getRefTypeName(algebraicType, schema.types);
+      if (refTypeName != null) {
+        final fileName = _toSnakeCase(refTypeName);
+        imports.add("import '$fileName.dart';");
+      }
+    }
+  }
+
   bool _isTimestamp(Map<String, dynamic> algebraicType) {
     if (algebraicType.containsKey('Product')) {
       final product = algebraicType['Product'];
@@ -253,7 +524,8 @@ class TableGenerator {
         if (elements.length == 1) {
           final element = elements[0];
           if (element['name'] != null &&
-              element['name']['some'] == '__timestamp_micros_since_unix_epoch__') {
+              element['name']['some'] ==
+                  '__timestamp_micros_since_unix_epoch__') {
             return true;
           }
         }

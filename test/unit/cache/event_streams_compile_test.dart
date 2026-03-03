@@ -42,7 +42,8 @@ void main() {
     });
 
     test('convenience filter streams exist', () {
-      expect(table.insertsFromReducers, isA<Stream<TableInsertEvent<String>>>());
+      expect(
+          table.insertsFromReducers, isA<Stream<TableInsertEvent<String>>>());
       expect(table.myInserts, isA<Stream<TableInsertEvent<String>>>());
       expect(table.eventsFromReducers, isA<Stream<TableEvent<String>>>());
       expect(table.myEvents, isA<Stream<TableEvent<String>>>());
@@ -130,7 +131,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test_reducer',
         reducerArgs: {'key': 'value'},
       );
@@ -146,7 +147,7 @@ void main() {
       final reducer = event.context.event as ReducerEvent;
       expect(reducer.reducerName, equals('test_reducer'));
       expect(reducer.timestamp, equals(Int64(123456)));
-      expect(reducer.energyConsumed, equals(100));
+      expect(reducer.energyConsumed, equals(BigInt.from(100)));
       expect(reducer.status, isA<Committed>());
     });
 

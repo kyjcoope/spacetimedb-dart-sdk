@@ -42,7 +42,7 @@ class DartGenerator {
     }
 
     if (schema.reducers.isNotEmpty) {
-      final generator = ReducerGenerator(schema.reducers);
+      final generator = ReducerGenerator(schema.reducers, schema: schema);
       files.add(GeneratedFile(
           filename: 'reducers.dart', content: generator.generate()));
 

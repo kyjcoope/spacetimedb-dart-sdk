@@ -23,7 +23,7 @@ class TransactionResult {
   ///
   /// `null` means unavailable (e.g., TransactionUpdateLight).
   /// `0` means the reducer was free (no energy charged).
-  final int? energyConsumed;
+  final BigInt? energyConsumed;
 
   /// Total execution duration
   ///
@@ -75,7 +75,8 @@ class TransactionResult {
         (message.timestamp ~/ Int64(1000)).toInt(),
       ),
       energyConsumed: message.energyQuantaUsed,
-      executionDuration: Duration(microseconds: message.totalHostExecutionDuration.toInt()),
+      executionDuration:
+          Duration(microseconds: message.totalHostExecutionDuration.toInt()),
       reducerName: message.reducerCall.reducerName,
       reducerId: message.reducerCall.reducerId,
       isLightUpdate: false,
@@ -87,7 +88,8 @@ class TransactionResult {
       TransactionUpdateLightMessage message) {
     return TransactionResult(
       status: Committed(), // Light updates always mean success
-      timestamp: DateTime.now(), // Approximate - server doesn't provide timestamp
+      timestamp:
+          DateTime.now(), // Approximate - server doesn't provide timestamp
       energyConsumed: null, // Not available in light updates
       executionDuration: null, // Not available in light updates
       reducerName: null,
@@ -129,7 +131,9 @@ class TransactionResult {
   @override
   String toString() {
     final energyStr = energyConsumed != null ? '$energyConsumed' : 'unknown';
-    final durationStr = executionDuration != null ? '${executionDuration!.inMilliseconds}ms' : 'unknown';
+    final durationStr = executionDuration != null
+        ? '${executionDuration!.inMilliseconds}ms'
+        : 'unknown';
     return 'TransactionResult('
         'status: ${status.runtimeType}, '
         'reducer: $reducerName, '

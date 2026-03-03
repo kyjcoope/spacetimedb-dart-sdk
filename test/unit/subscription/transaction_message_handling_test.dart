@@ -23,7 +23,7 @@ void main() {
         ),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
-        energyQuantaUsed: 100,
+        energyQuantaUsed: BigInt.from(100),
         totalHostExecutionDuration: Int64(5000),
       );
 
@@ -34,7 +34,7 @@ void main() {
       expect(message.status, isA<Committed>());
       expect(message.callerIdentity, isNotNull);
       expect(message.callerConnectionId, isNotNull);
-      expect(message.energyQuantaUsed, equals(100));
+      expect(message.energyQuantaUsed, equals(BigInt.from(100)));
     });
 
     test('handles Failed transaction status', () {
@@ -51,7 +51,7 @@ void main() {
         ),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
-        energyQuantaUsed: 50,
+        energyQuantaUsed: BigInt.from(50),
         totalHostExecutionDuration: Int64(2000),
       );
 
@@ -77,7 +77,7 @@ void main() {
         ),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List(16),
-        energyQuantaUsed: 1000,
+        energyQuantaUsed: BigInt.from(1000),
         totalHostExecutionDuration: Int64(10000),
       );
 
@@ -108,7 +108,7 @@ void main() {
         status: Committed(),
         callerIdentity: Uint8List(32),
         callerConnectionId: Uint8List.fromList([1, 2, 3, 4]),
-        energyConsumed: 100,
+        energyConsumed: BigInt.from(100),
         reducerName: 'test_reducer',
         reducerArgs: {'key': 'value'},
       );
@@ -126,7 +126,7 @@ void main() {
       // After type guard, access fields directly from promoted type
       expect(contextEvent.reducerName, equals('test_reducer'));
       expect(contextEvent.timestamp, equals(Int64(123456)));
-      expect(contextEvent.energyConsumed, equals(100));
+      expect(contextEvent.energyConsumed, equals(BigInt.from(100)));
     });
   });
 
@@ -136,7 +136,7 @@ void main() {
       final status = Committed();
       final callerIdentity = Uint8List(32);
       final callerConnectionId = Uint8List.fromList([5, 6, 7, 8]);
-      const energyConsumed = 250;
+      final energyConsumed = BigInt.from(250);
       const reducerName = 'update_note';
       final reducerArgs = {'title': 'Updated Title'};
 

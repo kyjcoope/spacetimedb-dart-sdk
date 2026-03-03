@@ -44,7 +44,7 @@ class ReducerEvent extends Event {
   final Uint8List? callerConnectionId;
 
   /// Energy consumed by the reducer execution (optional)
-  final int? energyConsumed;
+  final BigInt? energyConsumed;
 
   /// Name of the reducer that was called
   final String reducerName;
